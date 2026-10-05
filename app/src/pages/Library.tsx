@@ -1,19 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, completion, kindLabel, type MediaKind, statusLabel, type TrackState } from "@/lib/api";
 
 // Full filters (genre, year, rating) arrive in phase 6; status is enough to start.
 const statuses: Record<MediaKind, TrackState["status"][]> = {
-  movie: ["completed"],
+  movie: ["watching", "completed"],
   show: ["watching", "completed"],
   audiobook: ["listening", "finished"],
 };
 
 export function Library({ kind }: { kind: MediaKind }) {
-  const [status, setStatus] = useState<string>("all");
+  // The filter lives in the URL (?status=listening) so Back from an item returns to the same view.
+  const [params, setParams] = useSearchParams();
+  const status = params.get("status") ?? "all";
+  const setStatus = (s: string) => setParams(s === "all" ? {} : { status: s }, { replace: true });
   const { data, isLoading } = useQuery({ queryKey: ["library", kind], queryFn: () => api.library(kind) });
   const items = (data ?? []).filter((i) => status === "all" || i.state.status === status);
 

@@ -13,16 +13,29 @@ export type NewEvent = {
   occurredAt: string;
 };
 
+export const MANUAL = "manual";
+export const DEFAULT_THRESHOLD = 0.9;
+/** Audiobooks count as finished at 99%: apps often stop a few seconds short (end credits) without marking them done. */
+export const BOOK_DONE = 0.99;
+
 /** Same content, same id. A plugin re-sending an event it already sent changes nothing. */
 export function eventId(e: NewEvent) {
   const parts = [e.source, e.mediaKey, e.kind, e.season ?? "", e.episode ?? "", e.progress ?? "", e.occurredAt];
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32);
 }
 
-/** Appends events, skipping any already stored. Returns how many were new. */
+/**
+ * Appends events, skipping any already stored. Sync rule 4: only the user can unmark, so an
+ * "unwatched" from any plugin is refused. Returns how many were stored and how many refused.
+ */
 export function appendEvents(db: Db, list: NewEvent[], now = Date.now()) {
   let inserted = 0;
+  let refused = 0;
   for (const e of list) {
+    if (e.kind === "unwatched" && e.source !== MANUAL) {
+      refused++;
+      continue;
+    }
     const res = db
       .insert(events)
       .values({
@@ -40,7 +53,7 @@ export function appendEvents(db: Db, list: NewEvent[], now = Date.now()) {
       .run();
     inserted += res.changes;
   }
-  return inserted;
+  return { inserted, refused };
 }
 
 export function eventsFor(db: Db, mediaKey: string) {
@@ -57,37 +70,80 @@ export type TrackState = {
   lastActivityAt: string | null;
   watchCount?: number; // movies
   watchedEpisodes?: string[]; // shows, as "s1e3"
-  progress?: number; // audiobooks, 0..1
+  current?: { season: number; episode: number; progress: number } | null; // shows: latest unfinished episode
+  progress?: number; // movies in progress, audiobooks; 0..1
 };
 
 export const episodeTag = (season: number, episode: number) => `s${season}e${episode}`;
 
+/**
+ * One viewing of one movie or episode, folded event by event (oldest first). Sync rules 2 and 3:
+ * the latest progress wins; reaching the threshold counts a watch once, and dropping back below it
+ * afterwards starts a new viewing instead of undoing the watch.
+ */
+class Viewing {
+  watches = 0;
+  counted = false; // has the current viewing already been counted?
+  progress: number | null = null; // unfinished progress of the current viewing
+
+  apply(e: EventRow, threshold: number) {
+    if (e.kind === "watched") {
+      this.watches++;
+      this.counted = true;
+      this.progress = null;
+    } else if (e.kind === "unwatched") {
+      this.watches = 0;
+      this.counted = false;
+      this.progress = null;
+    } else if (e.kind === "progress" && e.progress != null) {
+      if (e.progress >= threshold) {
+        if (!this.counted) this.watches++;
+        this.counted = true;
+        this.progress = null;
+      } else {
+        this.counted = false;
+        this.progress = e.progress > 0 ? e.progress : null;
+      }
+    }
+  }
+}
+
 /** Folds a media item's events (oldest first) into what the UI shows. */
-export function project(kind: MediaKind, list: EventRow[], airedEpisodes?: number): TrackState {
+export function project(
+  kind: MediaKind,
+  list: EventRow[],
+  airedEpisodes?: number,
+  threshold = DEFAULT_THRESHOLD,
+): TrackState {
   const last = list.at(-1)?.occurredAt ?? null;
 
   if (kind === "movie") {
-    let watchCount = 0;
-    for (const e of list) {
-      if (e.kind === "watched") watchCount++;
-      if (e.kind === "unwatched") watchCount = 0;
-    }
-    return { status: watchCount > 0 ? "completed" : "planned", lastActivityAt: last, watchCount };
+    const v = new Viewing();
+    for (const e of list) v.apply(e, threshold);
+    const status = v.progress != null ? "watching" : v.watches > 0 ? "completed" : "planned";
+    return { status, lastActivityAt: last, watchCount: v.watches, progress: v.progress ?? undefined };
   }
 
   if (kind === "show") {
-    const seen = new Set<string>();
+    const eps = new Map<string, Viewing>();
+    let current: TrackState["current"] = null;
     for (const e of list) {
       if (e.season == null || e.episode == null) continue;
       const tag = episodeTag(e.season, e.episode);
-      if (e.kind === "watched") seen.add(tag);
-      if (e.kind === "unwatched") seen.delete(tag);
+      const v = eps.get(tag) ?? new Viewing();
+      eps.set(tag, v);
+      v.apply(e, threshold);
+      if (v.progress != null) current = { season: e.season, episode: e.episode, progress: v.progress };
+      else if (current && current.season === e.season && current.episode === e.episode) current = null;
     }
-    const done = airedEpisodes != null && airedEpisodes > 0 && seen.size >= airedEpisodes;
+    // Sync rule 1: an episode is watched if any source ever completed it (same episode counts once).
+    const seen = [...eps].filter(([, v]) => v.watches > 0).map(([tag]) => tag);
+    const done = airedEpisodes != null && airedEpisodes > 0 && seen.length >= airedEpisodes;
     return {
-      status: done ? "completed" : seen.size > 0 ? "watching" : "planned",
+      status: done ? "completed" : seen.length > 0 || current ? "watching" : "planned",
       lastActivityAt: last,
-      watchedEpisodes: [...seen],
+      watchedEpisodes: seen,
+      current,
     };
   }
 
@@ -96,7 +152,7 @@ export function project(kind: MediaKind, list: EventRow[], airedEpisodes?: numbe
   for (const e of list) {
     if (e.kind === "progress" && e.progress != null) {
       progress = Math.min(1, Math.max(0, e.progress));
-      finished = progress >= 1;
+      finished = progress >= BOOK_DONE;
     }
     if (e.kind === "finished") {
       progress = 1;

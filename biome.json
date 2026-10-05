@@ -1,5 +1,5 @@
 {
-  "files": { "includes": ["_engine/**", "app/src/**", "!app/src/components/ui/**", "e2e/**", "*.ts"] },
+  "files": { "includes": ["_engine/**", "plugins/**", "app/src/**", "!app/src/components/ui", "e2e/**", "*.ts"] },
   "formatter": { "indentStyle": "space", "lineWidth": 120 },
   "css": { "parser": { "tailwindDirectives": true } }
 }

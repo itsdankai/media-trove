@@ -1,17 +1,16 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { zValidator } from "@hono/zod-validator";
 import { desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { type Db, events, type MediaRow, media } from "./db.ts";
-import { appendEvents, eventsFor, project } from "./events.ts";
-import {
-  type MediaInfo,
-  type MediaKind,
-  type MetadataProvider,
-  mediaKinds,
-  ProviderUnavailable,
-  parseKey,
-} from "./metadata/types.ts";
+import { connections, type Db, events, type MediaRow, media } from "./db.ts";
+import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
+import { createLibrary } from "./library.ts";
+import { type MediaKind, type MetadataProvider, mediaKinds, ProviderUnavailable, parseKey } from "./metadata/types.ts";
+import { type PluginHost, PluginUserError } from "./plugins/host.ts";
+import { getSettings, updateSettings } from "./settings.ts";
+import type { Sync } from "./sync.ts";
 
 const kindSchema = z.enum(mediaKinds);
 
@@ -24,118 +23,223 @@ const eventSchema = z.object({
   occurredAt: z.iso.datetime({ offset: true }).optional(),
 });
 
-export function createApp(db: Db, providers: MetadataProvider[]) {
-  const providerFor = (kind: MediaKind) => {
-    const p = providers.find((x) => x.kinds.includes(kind));
-    if (!p) throw new ProviderUnavailable(`No metadata source for ${kind}`);
-    return p;
-  };
+export type Plugins = { host: PluginHost; sync: Sync };
 
-  function upsertMedia(info: MediaInfo) {
-    const row = {
-      key: info.key,
-      kind: info.kind,
-      title: info.title,
-      year: info.year,
-      poster: info.poster,
-      overview: info.overview,
-      genres: info.genres,
-      extra: { ...info.extra, subtitle: info.subtitle ?? null },
-      updatedAt: Date.now(),
-    };
-    db.insert(media).values(row).onConflictDoUpdate({ target: media.key, set: row }).run();
-    return row;
-  }
-
-  async function ensureMedia(key: string) {
-    const cached = db.select().from(media).where(eq(media.key, key)).get();
-    if (cached) return cached;
-    return upsertMedia(await providerFor(parseKey(key).kind).details(key));
-  }
+export function createApp(
+  db: Db,
+  providers: MetadataProvider[],
+  plugins?: Plugins,
+  opts: { artworkDir?: string } = {},
+) {
+  const lib = createLibrary(db, providers, opts);
 
   const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) =>
-    project(m.kind as MediaKind, list, m.extra.airedEpisodes as number | undefined);
+    project(m.kind as MediaKind, list, m.extra.airedEpisodes as number | undefined, getSettings(db).watchedThreshold);
 
-  return new Hono()
-    .onError((err, c) => {
-      if (err instanceof ProviderUnavailable) return c.json({ error: err.message }, 503);
-      console.error(err);
-      return c.json({ error: err.message }, 500);
-    })
+  const needPlugins = () => {
+    if (!plugins) throw new ProviderUnavailable("Plugins are not enabled in this instance.");
+    return plugins;
+  };
 
-    .get("/api/health", (c) => c.json({ ok: true }))
+  /** Plugin id -> display name, for "via Stremio". */
+  async function sourceNames() {
+    const names: Record<string, string> = { [MANUAL]: "You" };
+    if (plugins) for (const p of await plugins.host.catalog().catch(() => [])) names[p.id] = p.name;
+    return names;
+  }
 
-    .get("/api/config", (c) => c.json({ tmdb: Boolean(process.env.TMDB_API_KEY) }))
+  const publicConnection = (c: typeof connections.$inferSelect) => ({
+    id: c.id,
+    pluginId: c.pluginId,
+    accountName: c.accountName,
+    lastSyncAt: c.lastSyncAt,
+    lastError: c.lastError,
+    lastSummary: c.lastSummary ? JSON.parse(c.lastSummary) : null,
+    syncing: plugins?.sync.isRunning(c.id) ?? false,
+    createdAt: c.createdAt,
+  });
 
-    .get("/api/search", zValidator("query", z.object({ kind: kindSchema, q: z.string().min(1) })), async (c) => {
-      const { kind, q } = c.req.valid("query");
-      return c.json(await providerFor(kind).search(kind, q));
-    })
+  return (
+    new Hono()
+      .onError((err, c) => {
+        if (err instanceof ProviderUnavailable) return c.json({ error: err.message }, 503);
+        if (err instanceof PluginUserError) return c.json({ error: err.message }, 400);
+        console.error(err);
+        return c.json({ error: err.message }, 500);
+      })
 
-    .get("/api/media/:key", async (c) => {
-      const key = c.req.param("key");
-      const info = upsertMedia(await providerFor(parseKey(key).kind).details(key));
-      const list = eventsFor(db, key);
-      return c.json({ media: info, state: stateOf(info, list), events: list.slice().reverse() });
-    })
+      .get("/api/health", (c) => c.json({ ok: true }))
 
-    .get("/api/media/:key/season/:n", async (c) => {
-      const key = c.req.param("key");
-      const p = providerFor(parseKey(key).kind);
-      if (!p.season) return c.json({ error: "no seasons for this kind" }, 400);
-      return c.json(await p.season(key, Number(c.req.param("n"))));
-    })
+      // Covers saved from connected apps (names are hashes we generated; nothing else is served).
+      .get("/api/artwork/:file", (c) => {
+        const file = c.req.param("file");
+        if (!opts.artworkDir || !/^[a-f0-9]{20}\.(jpg|png|webp)$/.test(file)) return c.notFound();
+        try {
+          const body = readFileSync(join(opts.artworkDir, file));
+          const type = file.endsWith(".png") ? "image/png" : file.endsWith(".webp") ? "image/webp" : "image/jpeg";
+          return c.body(body, 200, { "content-type": type, "cache-control": "public, max-age=86400" });
+        } catch {
+          return c.notFound();
+        }
+      })
 
-    .post(
-      "/api/events",
-      zValidator("json", z.union([eventSchema, z.array(eventSchema).min(1).max(500)])),
-      async (c) => {
-        const body = c.req.valid("json");
-        const list = Array.isArray(body) ? body : [body];
-        for (const key of new Set(list.map((e) => e.mediaKey))) await ensureMedia(key);
-        const now = new Date().toISOString();
-        const inserted = appendEvents(
-          db,
-          list.map((e) => ({ ...e, source: "manual", occurredAt: e.occurredAt ?? now })),
-        );
-        return c.json({ inserted }, 201);
-      },
-    )
+      .get("/api/config", (c) => c.json({ tmdb: Boolean(process.env.TMDB_API_KEY), plugins: Boolean(plugins) }))
 
-    .get("/api/library", zValidator("query", z.object({ kind: kindSchema.optional() })), (c) => {
-      const { kind } = c.req.valid("query");
-      const keys = db
-        .selectDistinct({ k: events.mediaKey })
-        .from(events)
-        .all()
-        .map((r) => r.k);
-      if (!keys.length) return c.json([]);
-      const rows = db
-        .select()
-        .from(media)
-        .where(inArray(media.key, keys))
-        .all()
-        .filter((m) => !kind || m.kind === kind);
-      const items = rows.map((m) => ({ media: m, state: stateOf(m) }));
-      items.sort((a, b) => (b.state.lastActivityAt ?? "").localeCompare(a.state.lastActivityAt ?? ""));
-      return c.json(items);
-    })
+      // --- settings -------------------------------------------------------------------------
+      .get("/api/settings", (c) => c.json(getSettings(db)))
 
-    .get(
-      "/api/history",
-      zValidator("query", z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) })),
-      (c) => {
-        const { limit } = c.req.valid("query");
-        const rows = db
-          .select({ event: events, title: media.title, poster: media.poster, mediaKind: media.kind })
+      .put(
+        "/api/settings",
+        zValidator(
+          "json",
+          z.object({ watchedThreshold: z.number().min(0.5).max(1).optional(), setupComplete: z.boolean().optional() }),
+        ),
+        (c) => c.json(updateSettings(db, c.req.valid("json"))),
+      )
+
+      // --- media ----------------------------------------------------------------------------
+      .get("/api/search", zValidator("query", z.object({ kind: kindSchema, q: z.string().min(1) })), async (c) => {
+        const { kind, q } = c.req.valid("query");
+        return c.json(await lib.providerFor(kind).search(kind, q));
+      })
+
+      .get("/api/media/:key", async (c) => {
+        const key = c.req.param("key");
+        const info = lib.upsertMedia(await lib.providerFor(parseKey(key).kind).details(key));
+        const list = eventsFor(db, key);
+        const names = await sourceNames();
+        const withSource = list
+          .slice()
+          .reverse()
+          .map((e) => ({ ...e, sourceName: names[e.source] ?? e.source }));
+        return c.json({ media: info, state: stateOf(info, list), events: withSource });
+      })
+
+      .get("/api/media/:key/season/:n", async (c) => {
+        const key = c.req.param("key");
+        const p = lib.providerFor(parseKey(key).kind);
+        if (!p.season) return c.json({ error: "no seasons for this kind" }, 400);
+        return c.json(await p.season(key, Number(c.req.param("n"))));
+      })
+
+      .post(
+        "/api/events",
+        zValidator("json", z.union([eventSchema, z.array(eventSchema).min(1).max(500)])),
+        async (c) => {
+          const body = c.req.valid("json");
+          const list = Array.isArray(body) ? body : [body];
+          for (const key of new Set(list.map((e) => e.mediaKey))) await lib.ensureMedia(key);
+          const now = new Date().toISOString();
+          const { inserted } = appendEvents(
+            db,
+            list.map((e) => ({ ...e, source: MANUAL, occurredAt: e.occurredAt ?? now })),
+          );
+          return c.json({ inserted }, 201);
+        },
+      )
+
+      .get("/api/library", zValidator("query", z.object({ kind: kindSchema.optional() })), (c) => {
+        const { kind } = c.req.valid("query");
+        const keys = db
+          .selectDistinct({ k: events.mediaKey })
           .from(events)
-          .leftJoin(media, eq(events.mediaKey, media.key))
-          .orderBy(desc(events.occurredAt), desc(events.createdAt))
-          .limit(limit)
-          .all();
-        return c.json(rows);
-      },
-    );
+          .all()
+          .map((r) => r.k);
+        if (!keys.length) return c.json([]);
+        const rows = db
+          .select()
+          .from(media)
+          .where(inArray(media.key, keys))
+          .all()
+          .filter((m) => !kind || m.kind === kind);
+        const items = rows.map((m) => ({ media: m, state: stateOf(m) }));
+        items.sort((a, b) => (b.state.lastActivityAt ?? "").localeCompare(a.state.lastActivityAt ?? ""));
+        return c.json(items);
+      })
+
+      .get(
+        "/api/history",
+        zValidator("query", z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) })),
+        async (c) => {
+          const { limit } = c.req.valid("query");
+          const names = await sourceNames();
+          const rows = db
+            .select({ event: events, title: media.title, poster: media.poster, mediaKind: media.kind })
+            .from(events)
+            .leftJoin(media, eq(events.mediaKey, media.key))
+            .orderBy(desc(events.occurredAt), desc(events.createdAt))
+            .limit(limit)
+            .all();
+          return c.json(rows.map((r) => ({ ...r, sourceName: names[r.event.source] ?? r.event.source })));
+        },
+      )
+
+      // --- marketplace & connections ----------------------------------------------------------
+      .get("/api/marketplace", zValidator("query", z.object({ q: z.string().optional() })), async (c) => {
+        const { host } = needPlugins();
+        const q = (c.req.valid("query").q ?? "").trim().toLowerCase();
+        const counts = new Map<string, number>();
+        for (const conn of db.select().from(connections).all())
+          counts.set(conn.pluginId, (counts.get(conn.pluginId) ?? 0) + 1);
+        const list = (await host.catalog())
+          .filter(
+            (p) => !q || [p.name, p.description, p.id, ...p.tags, ...p.kinds].some((s) => s.toLowerCase().includes(q)),
+          )
+          .map((p) => ({ ...p, connections: counts.get(p.id) ?? 0 }));
+        return c.json(list);
+      })
+
+      .post("/api/marketplace/custom", zValidator("json", z.object({ url: z.url() })), async (c) => {
+        const { host } = needPlugins();
+        if (!host.addCustom) return c.json({ error: "not supported" }, 400);
+        const m = await host.addCustom(c.req.valid("json").url);
+        return c.json({ id: m.id, name: m.name }, 201);
+      })
+
+      .get("/api/plugins", (c) => c.json(needPlugins().host.statuses()))
+
+      .get("/api/plugins/:id/manifest", async (c) => c.json(await needPlugins().host.manifest(c.req.param("id"))))
+
+      .get("/api/connections", (c) => {
+        needPlugins();
+        return c.json(db.select().from(connections).all().map(publicConnection));
+      })
+
+      .post(
+        "/api/connections",
+        zValidator("json", z.object({ pluginId: z.string().min(1), fields: z.record(z.string(), z.string()) })),
+        async (c) => {
+          const { sync } = needPlugins();
+          const { pluginId, fields } = c.req.valid("json");
+          const row = await sync.connect(pluginId, fields);
+          sync.syncNow(row.id).catch(() => {}); // first sync runs in the background
+          return c.json({ id: row.id, accountName: row.accountName }, 201);
+        },
+      )
+
+      .post("/api/connections/:id/sync", async (c) => {
+        const { sync } = needPlugins();
+        try {
+          return c.json(await sync.syncNow(c.req.param("id")));
+        } catch (e) {
+          return c.json({ error: (e as Error).message }, 502);
+        }
+      })
+
+      .post("/api/connections/:id/resync", async (c) => {
+        const { sync } = needPlugins();
+        try {
+          return c.json(await sync.resync(c.req.param("id")));
+        } catch (e) {
+          return c.json({ error: (e as Error).message }, 502);
+        }
+      })
+
+      .delete("/api/connections/:id", (c) => {
+        needPlugins().sync.remove(c.req.param("id"));
+        return c.body(null, 204);
+      })
+  );
 }
 
 export type AppType = ReturnType<typeof createApp>;

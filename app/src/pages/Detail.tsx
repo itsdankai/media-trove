@@ -1,15 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { Check, CheckCheck, Eye, RotateCcw } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Eye, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { Poster } from "@/components/PosterCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
-import { api, completion, formatMinutes, type Media, type NewEvent, statusLabel, type TrackState } from "@/lib/api";
+import {
+  api,
+  completion,
+  formatMinutes,
+  kindPath,
+  type Media,
+  type NewEvent,
+  statusLabel,
+  type TrackState,
+} from "@/lib/api";
 import { describe } from "./History.tsx";
 
 export function Detail() {
@@ -17,6 +26,10 @@ export function Detail() {
   const key = useParams().key!;
   const { data, error, isLoading } = useQuery({ queryKey: ["media", key], queryFn: () => api.media(key) });
   const track = useTrack(key);
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Back to wherever you came from (keeps the Listening/Finished filter); a direct link goes to the category.
+  const back = () => (location.key !== "default" ? navigate(-1) : navigate(kindPath[data?.media.kind ?? "movie"]));
 
   if (isLoading) return <Skeleton className="h-80 w-full" />;
   if (error || !data) return <p className="text-muted-foreground">{error?.message ?? "Not found."}</p>;
@@ -24,7 +37,10 @@ export function Detail() {
 
   return (
     <div className="space-y-10">
-      <section className="relative -mx-4 -mt-6 overflow-hidden px-4 pt-6 pb-8 md:-mx-8 md:px-8">
+      <Button variant="ghost" size="sm" className="-ml-2 -mb-6" onClick={back}>
+        <ArrowLeft /> Back
+      </Button>
+      <section className="relative -mx-4 overflow-hidden px-4 pt-6 pb-8 md:-mx-8 md:px-8">
         {m.extra.backdrop && (
           <img
             src={m.extra.backdrop}
@@ -69,7 +85,7 @@ export function Detail() {
           <ul className="divide-y rounded-xl border bg-card text-sm">
             {events.map((e) => (
               <li key={e.id} className="flex justify-between gap-4 px-4 py-2.5">
-                <span>{describe(e)}</span>
+                <span>{describe(e, m.kind)}</span>
                 <time className="text-muted-foreground">{new Date(e.occurredAt).toLocaleString()}</time>
               </li>
             ))}

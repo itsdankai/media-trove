@@ -65,9 +65,9 @@ describe("event log", () => {
 
   it("stores the same event only once", () => {
     const { db } = setup();
-    expect(appendEvents(db, [e])).toBe(1);
-    expect(appendEvents(db, [e])).toBe(0);
-    expect(appendEvents(db, [{ ...e }, { ...e }])).toBe(0);
+    expect(appendEvents(db, [e]).inserted).toBe(1);
+    expect(appendEvents(db, [e]).inserted).toBe(0);
+    expect(appendEvents(db, [{ ...e }, { ...e }]).inserted).toBe(0);
   });
 
   it("gives different events different ids", () => {

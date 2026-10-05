@@ -7,7 +7,10 @@ import { Detail } from "./pages/Detail.tsx";
 import { History } from "./pages/History.tsx";
 import { Home } from "./pages/Home.tsx";
 import { Library } from "./pages/Library.tsx";
+import { Marketplace } from "./pages/Marketplace.tsx";
 import { Search } from "./pages/Search.tsx";
+import { Settings } from "./pages/Settings.tsx";
+import { Setup } from "./pages/Setup.tsx";
 import "./styles.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1 } } });
@@ -26,7 +29,10 @@ createRoot(document.getElementById("root")!).render(
             <Route path="history" element={<History />} />
             <Route path="search" element={<Search />} />
             <Route path="media/:key" element={<Detail />} />
+            <Route path="marketplace" element={<Marketplace />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
+          <Route path="setup" element={<Setup />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
