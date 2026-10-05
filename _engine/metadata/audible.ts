@@ -1,6 +1,14 @@
 // Audiobooks from Audible's public catalog API: no key, no login. It's undocumented
 // (the same one Audiobookshelf's metadata search uses), so if it changes, only this file needs fixing.
-import { type MediaInfo, type MetadataProvider, makeKey, parseKey, type SearchResult, yearOf } from "./types.ts";
+import {
+  type MediaInfo,
+  type MetadataProvider,
+  makeKey,
+  parseKey,
+  type SearchResult,
+  sameTitle,
+  yearOf,
+} from "./types.ts";
 
 const domains: Record<string, string> = {
   us: "audible.com",
@@ -50,6 +58,16 @@ export function audibleProvider(
       return (data.products as Json[])
         .filter((p) => !String(p.content_delivery_type).includes("Podcast"))
         .map(toResult);
+    },
+
+    async resolve(ref) {
+      if (ref.kind !== "audiobook") return null;
+      if (ref.asin && /^[A-Z0-9]{10}$/i.test(ref.asin)) return makeKey("audible", "audiobook", ref.asin.toUpperCase());
+      if (!ref.title) return null;
+      const q = [ref.title, ref.author].filter(Boolean).join(" ");
+      const data = await get("", { keywords: q, num_results: "10", products_sort_by: "Relevance" });
+      const hit = (data.products as Json[]).find((p) => sameTitle(p.title, ref.title as string));
+      return hit ? makeKey("audible", "audiobook", hit.asin) : null;
     },
 
     async details(key): Promise<MediaInfo> {

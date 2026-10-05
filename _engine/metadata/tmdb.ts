@@ -11,6 +11,7 @@ import {
   parseKey,
   type SearchResult,
   type Season,
+  sameTitle,
   yearOf,
 } from "./types.ts";
 
@@ -47,6 +48,22 @@ export function tmdbProvider(apiKey = process.env.TMDB_API_KEY, fetchFn: typeof 
 
   return {
     kinds: ["movie", "show"],
+
+    async resolve(ref) {
+      if (ref.kind === "audiobook") return null;
+      if (ref.tmdb) return makeKey("tmdb", ref.kind, ref.tmdb);
+      const external = ref.imdb ? ["imdb_id", ref.imdb] : ref.tvdb ? ["tvdb_id", String(ref.tvdb)] : null;
+      if (external) {
+        const r = await get(`/find/${external[1]}`, { external_source: external[0] });
+        const hit = (ref.kind === "movie" ? r.movie_results : r.tv_results)?.[0];
+        if (hit) return makeKey("tmdb", ref.kind, hit.id);
+      }
+      if (!ref.title) return null;
+      const year = ref.year ? { [ref.kind === "movie" ? "year" : "first_air_date_year"]: String(ref.year) } : {};
+      const data = await get(`/search/${tmdbType(ref.kind)}`, { query: ref.title, ...year });
+      const hit = (data.results as Json[]).find((x) => sameTitle(x.title ?? x.name, ref.title as string));
+      return hit ? makeKey("tmdb", ref.kind, hit.id) : null;
+    },
 
     async search(kind, q) {
       const data = await get(`/search/${tmdbType(kind)}`, { query: q, include_adult: "false" });

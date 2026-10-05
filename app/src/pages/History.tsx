@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { Poster } from "@/components/PosterCard";
-import { api, type EventRow } from "@/lib/api";
+import { api, type EventRow, type MediaKind } from "@/lib/api";
 
 export function History() {
   const { data = [], isLoading } = useQuery({ queryKey: ["history"], queryFn: () => api.history(300) });
@@ -25,7 +25,7 @@ export function History() {
         <section key={day} className="space-y-2">
           <h2 className="text-sm font-medium text-muted-foreground">{day}</h2>
           <ul className="divide-y rounded-xl border bg-card">
-            {rows.map(({ event, title, poster, mediaKind }) => (
+            {rows.map(({ event, title, poster, mediaKind, sourceName }) => (
               <li key={event.id}>
                 <Link
                   to={`/media/${event.mediaKey}`}
@@ -39,7 +39,7 @@ export function History() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{title ?? event.mediaKey}</p>
-                    <p className="text-sm text-muted-foreground">{describe(event)}</p>
+                    <p className="text-sm text-muted-foreground">{describe(event, mediaKind, sourceName)}</p>
                   </div>
                   <time className="text-xs text-muted-foreground">
                     {new Date(event.occurredAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
@@ -54,16 +54,18 @@ export function History() {
   );
 }
 
-export function describe(e: EventRow) {
+export function describe(e: EventRow, kind?: MediaKind | null, sourceName = e.sourceName) {
   const ep = e.season != null && e.episode != null ? ` S${e.season} · E${e.episode}` : "";
+  const via = e.source !== "manual" && sourceName ? ` · via ${sourceName}` : "";
+  const pct = `${Math.round((e.progress ?? 0) * 100)}%`;
   switch (e.kind) {
     case "watched":
-      return `Watched${ep}`;
+      return `Watched${ep}${via}`;
     case "unwatched":
-      return `Unmarked${ep}`;
+      return `Unmarked${ep}${via}`;
     case "progress":
-      return `Listened to ${Math.round((e.progress ?? 0) * 100)}%`;
+      return `${kind === "audiobook" ? "Listened to" : `Watched${ep} to`} ${pct}${via}`;
     case "finished":
-      return "Finished";
+      return `Finished${via}`;
   }
 }

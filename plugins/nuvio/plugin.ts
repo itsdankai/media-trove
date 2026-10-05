@@ -1,0 +1,193 @@
+// Nuvio: reads watched items and resume positions from a Nuvio Sync account. Nuvio's backend is
+// Supabase-based; the official one is api.nuvio.tv and self-hosted ones work the same way. Each server
+// publishes its public client key at /.well-known/nuvio, so the user only needs the address.
+// Only read RPCs are called (sync_pull_*); nothing is ever written back.
+import { definePlugin, getJson, type Manifest, msToIso, type PluginEvent, UserError } from "../_sdk/index.ts";
+
+export const manifest: Manifest = {
+  contract: 1,
+  id: "nuvio",
+  name: "Nuvio",
+  version: "0.1.0",
+  description: "Track movies and episodes from your Nuvio Sync account.",
+  kinds: ["movie", "show"],
+  homepage: "https://nuvio.tv",
+  connect: {
+    fields: [
+      { key: "email", label: "Nuvio email", type: "email", required: true },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        help: "Used once to sign in. Not stored.",
+      },
+      { key: "profile", label: "Profile number", type: "number", default: "1", help: "1 is the main profile." },
+      {
+        key: "server",
+        label: "Server",
+        type: "url",
+        default: "https://api.nuvio.tv",
+        help: "Change only if you self-host Nuvio.",
+      },
+    ],
+  },
+  sync: { intervalSeconds: 300 },
+};
+
+type Creds = {
+  server: string;
+  key: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  profile: number;
+};
+
+type Session = { access_token: string; refresh_token: string; expires_in: number; user?: { email?: string } };
+
+export type WatchedItem = {
+  content_id: string;
+  content_type: string;
+  title: string;
+  season: number | null;
+  episode: number | null;
+  watched_at: number;
+};
+export type ProgressRow = {
+  content_id: string;
+  content_type: string;
+  video_id: string;
+  season: number | null;
+  episode: number | null;
+  position: number;
+  duration: number;
+  last_watched: number;
+};
+
+const READ_RPCS = new Set(["sync_pull_watched_items", "sync_pull_watch_progress", "sync_pull_profiles"]);
+
+async function discover(server: string) {
+  const s = server.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(s)) throw new UserError("Server must start with https://");
+  try {
+    const d = await getJson<{ service: string; backend_url: string; publishable_key: string }>(
+      `${s}/.well-known/nuvio`,
+    );
+    if (d.service !== "nuvio" || !d.publishable_key) throw new Error("not a Nuvio server");
+    return { server: d.backend_url.replace(/\/+$/, "") || s, key: d.publishable_key };
+  } catch {
+    throw new UserError(`${s} doesn't look like a Nuvio server.`);
+  }
+}
+
+async function auth(server: string, key: string, grant: "password" | "refresh_token", body: object) {
+  try {
+    return await getJson<Session>(`${server}/auth/v1/token?grant_type=${grant}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: key },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    if (status === 400 || status === 401) {
+      throw new UserError(
+        grant === "password" ? "Wrong Nuvio email or password." : "Nuvio sign-in expired. Reconnect Nuvio.",
+      );
+    }
+    throw e;
+  }
+}
+
+async function rpc<T>(c: Creds, name: string, params: object): Promise<T> {
+  if (!READ_RPCS.has(name)) throw new Error(`Nuvio plugin is read-only: refused ${name}`);
+  return getJson<T>(`${c.server}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: c.key, Authorization: `Bearer ${c.accessToken}` },
+    body: JSON.stringify(params),
+  });
+}
+
+export type Cursor = { watchedSince: number; progressSince: number };
+
+export default definePlugin<Creds>({
+  manifest,
+
+  async connect(fields) {
+    const { server, key } = await discover(fields.server || "https://api.nuvio.tv");
+    const s = await auth(server, key, "password", { email: fields.email?.trim(), password: fields.password });
+    const profile = Math.max(1, Number(fields.profile) || 1);
+    const creds: Creds = {
+      server,
+      key,
+      accessToken: s.access_token,
+      refreshToken: s.refresh_token,
+      expiresAt: Date.now() + s.expires_in * 1000,
+      profile,
+    };
+    const name = s.user?.email ?? fields.email ?? "Nuvio";
+    return { account: { name: profile > 1 ? `${name} (profile ${profile})` : name }, credentials: creds };
+  },
+
+  async sync(creds, rawCursor) {
+    const cursor: Cursor = (rawCursor as Cursor) ?? { watchedSince: 0, progressSince: 0 };
+    let c = creds;
+    let refreshed = false;
+    if (Date.now() > c.expiresAt - 60_000) {
+      const s = await auth(c.server, c.key, "refresh_token", { refresh_token: c.refreshToken });
+      c = {
+        ...c,
+        accessToken: s.access_token,
+        refreshToken: s.refresh_token,
+        expiresAt: Date.now() + s.expires_in * 1000,
+      };
+      refreshed = true;
+    }
+
+    const watched = await rpc<WatchedItem[]>(c, "sync_pull_watched_items", { p_profile_id: c.profile });
+    const progress = await rpc<ProgressRow[]>(c, "sync_pull_watch_progress", {
+      p_profile_id: c.profile,
+      p_since_last_watched: cursor.progressSince || null,
+    });
+
+    const events = [
+      ...watched.filter((w) => w.watched_at > cursor.watchedSince).flatMap(watchedEvent),
+      ...progress.filter((p) => p.last_watched > cursor.progressSince).flatMap(progressEvent),
+    ];
+    const next: Cursor = {
+      watchedSince: Math.max(cursor.watchedSince, ...watched.map((w) => w.watched_at)),
+      progressSince: Math.max(cursor.progressSince, ...progress.map((p) => p.last_watched)),
+    };
+    return { events, cursor: next, credentials: refreshed ? c : undefined };
+  },
+});
+
+const isShow = (type: string) => type === "series" || type === "show" || type === "tv";
+
+function ref(contentId: string, type: string, title?: string) {
+  const imdb = contentId.split(":")[0];
+  if (!imdb.startsWith("tt")) return null; // only IMDb-keyed content can be matched for now
+  return { kind: isShow(type) ? ("show" as const) : ("movie" as const), imdb, title: title || undefined };
+}
+
+export function watchedEvent(w: WatchedItem): PluginEvent[] {
+  const media = ref(w.content_id, w.content_type, w.title);
+  if (!media) return [];
+  if (media.kind === "show") {
+    if (w.season == null || w.episode == null || w.season < 1) return [];
+    return [{ media, kind: "watched", season: w.season, episode: w.episode, occurredAt: msToIso(w.watched_at) }];
+  }
+  return [{ media, kind: "watched", occurredAt: msToIso(w.watched_at) }];
+}
+
+export function progressEvent(p: ProgressRow): PluginEvent[] {
+  const media = ref(p.content_id, p.content_type);
+  if (!media || p.duration <= 0 || p.position <= 0) return [];
+  const progress = Math.min(1, p.position / p.duration);
+  const at = msToIso(p.last_watched);
+  if (media.kind === "show") {
+    if (p.season == null || p.episode == null || p.season < 1) return [];
+    return [{ media, kind: "progress", season: p.season, episode: p.episode, progress, occurredAt: at }];
+  }
+  return [{ media, kind: "progress", progress, occurredAt: at }];
+}

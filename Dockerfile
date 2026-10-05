@@ -14,6 +14,7 @@ ENV NODE_ENV=production PORT=8787 MEDIATROVE_DATA_DIR=/data
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/_engine ./_engine
+COPY --from=build /app/plugins ./plugins
 COPY --from=build /app/app/dist ./app/dist
 VOLUME /data
 EXPOSE 8787

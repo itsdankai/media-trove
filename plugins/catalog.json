@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "stremio",
+      "name": "Stremio",
+      "description": "Track movies and episodes you watch in Stremio.",
+      "kinds": ["movie", "show"],
+      "tags": ["player", "streaming"],
+      "author": "MediaTrove",
+      "bundled": true
+    },
+    {
+      "id": "nuvio",
+      "name": "Nuvio",
+      "description": "Track movies and episodes from your Nuvio Sync account.",
+      "kinds": ["movie", "show"],
+      "tags": ["player", "streaming"],
+      "author": "MediaTrove",
+      "bundled": true
+    },
+    {
+      "id": "audiobookshelf",
+      "name": "Audiobookshelf",
+      "description": "Track listening progress from your Audiobookshelf server.",
+      "kinds": ["audiobook"],
+      "tags": ["audiobooks", "server", "self-hosted"],
+      "author": "MediaTrove",
+      "bundled": true
+    }
+  ]
+}
