@@ -1,0 +1,87 @@
+import { cn } from "cn";
+import { Clapperboard, Gem, Headphones, History, House, Search as SearchIcon, Tv } from "lucide-react";
+import { type FormEvent, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router";
+import { Input } from "@/components/ui/input";
+
+const nav = [
+  { to: "/", label: "Home", icon: House, end: true },
+  { to: "/movies", label: "Movies", icon: Clapperboard },
+  { to: "/shows", label: "Shows", icon: Tv },
+  { to: "/audiobooks", label: "Audiobooks", icon: Headphones },
+  { to: "/history", label: "History", icon: History },
+];
+
+export function Layout() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
+  }
+
+  return (
+    <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
+      <aside className="hidden md:flex flex-col gap-1 border-r bg-card/40 p-4 sticky top-0 h-dvh">
+        <div className="flex items-center gap-2 px-2 pb-6 pt-1">
+          <Gem className="size-6 text-primary" />
+          <span className="text-lg font-semibold tracking-tight">MediaTrove</span>
+        </div>
+        {nav.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                isActive && "bg-accent text-foreground font-medium",
+              )
+            }
+          >
+            <Icon className="size-4" />
+            {label}
+          </NavLink>
+        ))}
+        <p className="mt-auto px-2 text-[11px] leading-snug text-muted-foreground">
+          Movie and show data from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </p>
+      </aside>
+
+      <div className="flex min-w-0 flex-col pb-20 md:pb-0">
+        <header className="sticky top-0 z-20 border-b bg-background/80 px-4 py-3 backdrop-blur md:px-8">
+          <form onSubmit={submit} className="relative mx-auto max-w-xl">
+            <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search movies, shows, audiobooks…"
+              className="pl-9"
+              aria-label="Search"
+            />
+          </form>
+        </header>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8">
+          <Outlet />
+        </main>
+      </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-card/95 backdrop-blur md:hidden">
+        {nav.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              cn("flex flex-col items-center gap-1 py-2 text-[11px] text-muted-foreground", isActive && "text-primary")
+            }
+          >
+            <Icon className="size-5" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
+}
