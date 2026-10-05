@@ -37,6 +37,7 @@ export type TrackState = {
   lastActivityAt: string | null;
   watchCount?: number;
   watchedEpisodes?: string[];
+  current?: { season: number; episode: number; progress: number } | null;
   progress?: number;
 };
 
@@ -48,6 +49,7 @@ export type EventRow = {
   episode: number | null;
   progress: number | null;
   source: string;
+  sourceName?: string;
   occurredAt: string;
 };
 
@@ -57,6 +59,61 @@ export type NewEvent = Pick<EventRow, "mediaKey" | "kind"> & {
   progress?: number;
 };
 
+export type Settings = { watchedThreshold: number; setupComplete: boolean };
+
+export type Field = {
+  key: string;
+  label: string;
+  type: "text" | "url" | "password" | "number" | "email";
+  required?: boolean;
+  placeholder?: string;
+  default?: string;
+  help?: string;
+};
+
+export type Manifest = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  kinds: MediaKind[];
+  homepage?: string;
+  connect: { fields: Field[]; note?: string };
+  sync: { intervalSeconds: number };
+};
+
+export type CatalogEntry = {
+  id: string;
+  name: string;
+  description: string;
+  kinds: MediaKind[];
+  tags: string[];
+  author: string;
+  bundled?: boolean;
+  manifestUrl?: string;
+  connections: number;
+};
+
+export type SyncSummary = { received: number; added: number; unmatched: number; refused: number; at: number };
+
+export type Connection = {
+  id: string;
+  pluginId: string;
+  accountName: string;
+  lastSyncAt: number | null;
+  lastError: string | null;
+  lastSummary: SyncSummary | null;
+  syncing: boolean;
+  createdAt: number;
+};
+
+export type PluginStatus = {
+  state: "stopped" | "starting" | "running" | "disconnected";
+  pid?: number;
+  lastError?: string;
+  since: number;
+};
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   const body = await res.json().catch(() => ({}));
@@ -64,23 +121,43 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+function send<T>(method: string, path: string, body?: unknown) {
+  return call<T>(path, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 export const api = {
-  config: () => call<{ tmdb: boolean }>("/api/config"),
+  config: () => call<{ tmdb: boolean; plugins: boolean }>("/api/config"),
   search: (kind: MediaKind, q: string) => call<SearchResult[]>(`/api/search?${new URLSearchParams({ kind, q })}`),
   media: (key: string) => call<{ media: Media; state: TrackState; events: EventRow[] }>(`/api/media/${key}`),
   season: (key: string, n: number) => call<Episode[]>(`/api/media/${key}/season/${n}`),
   library: (kind?: MediaKind) =>
     call<{ media: Media; state: TrackState }[]>(`/api/library${kind ? `?kind=${kind}` : ""}`),
   history: (limit = 100) =>
-    call<{ event: EventRow; title: string | null; poster: string | null; mediaKind: MediaKind | null }[]>(
-      `/api/history?limit=${limit}`,
-    ),
-  track: (e: NewEvent | NewEvent[]) =>
-    call<{ inserted: number }>("/api/events", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(e),
-    }),
+    call<
+      {
+        event: EventRow;
+        title: string | null;
+        poster: string | null;
+        mediaKind: MediaKind | null;
+        sourceName: string;
+      }[]
+    >(`/api/history?limit=${limit}`),
+  track: (e: NewEvent | NewEvent[]) => send<{ inserted: number }>("POST", "/api/events", e),
+  settings: () => call<Settings>("/api/settings"),
+  saveSettings: (patch: Partial<Settings>) => send<Settings>("PUT", "/api/settings", patch),
+  marketplace: (q = "") => call<CatalogEntry[]>(`/api/marketplace?q=${encodeURIComponent(q)}`),
+  addPluginUrl: (url: string) => send<{ id: string; name: string }>("POST", "/api/marketplace/custom", { url }),
+  manifest: (id: string) => call<Manifest>(`/api/plugins/${id}/manifest`),
+  pluginStatuses: () => call<Record<string, PluginStatus>>("/api/plugins"),
+  connections: () => call<Connection[]>("/api/connections"),
+  connect: (pluginId: string, fields: Record<string, string>) =>
+    send<{ id: string; accountName: string }>("POST", "/api/connections", { pluginId, fields }),
+  syncNow: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/sync`),
+  disconnect: (id: string) => fetch(`/api/connections/${id}`, { method: "DELETE" }),
 };
 
 export const kindLabel: Record<MediaKind, string> = { movie: "Movies", show: "Shows", audiobook: "Audiobooks" };
@@ -101,6 +178,7 @@ export function completion(m: Media, s: TrackState) {
     const total = m.extra.airedEpisodes || m.extra.totalEpisodes || 0;
     return total ? Math.min(1, (s.watchedEpisodes?.length ?? 0) / total) : 0;
   }
+  if (s.progress) return s.progress;
   return s.watchCount ? 1 : 0;
 }
 
@@ -108,4 +186,13 @@ export function formatMinutes(min: number | null | undefined) {
   if (!min) return null;
   const h = Math.floor(min / 60);
   return h ? `${h}h ${min % 60}m` : `${min}m`;
+}
+
+export function timeAgo(ms: number | null) {
+  if (!ms) return "never";
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(ms).toLocaleDateString();
 }

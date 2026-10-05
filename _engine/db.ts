@@ -31,7 +31,39 @@ export const media = sqliteTable("media", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// App settings (watched threshold, setup done). Values are JSON.
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value", { mode: "json" }).notNull(),
+});
+
+// One row per connected account. `credentials` is whatever the plugin returned from /connect
+// (tokens, never passwords), encrypted with crypto.ts.
+export const connections = sqliteTable("connections", {
+  id: text("id").primaryKey(),
+  pluginId: text("plugin_id").notNull(),
+  accountName: text("account_name").notNull(),
+  credentials: text("credentials").notNull(),
+  cursor: text("cursor", { mode: "json" }).$type<unknown>(),
+  lastSyncAt: integer("last_sync_at"),
+  lastError: text("last_error"),
+  lastSummary: text("last_summary"),
+  createdAt: integer("created_at").notNull(),
+});
+
+// Remembers how an outside id (imdb:tt0133093, asin:B0…) maps to a media key, so each is looked up once.
+export const idMap = sqliteTable("id_map", {
+  ref: text("ref").primaryKey(),
+  mediaKey: text("media_key"), // null = looked up, no match
+  checkedAt: integer("checked_at").notNull(),
+});
+
 const ddl = `
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS connections (
+  id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL, account_name TEXT NOT NULL, credentials TEXT NOT NULL,
+  cursor TEXT, last_sync_at INTEGER, last_error TEXT, last_summary TEXT, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS id_map (ref TEXT PRIMARY KEY, media_key TEXT, checked_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY, media_key TEXT NOT NULL, kind TEXT NOT NULL, season INTEGER, episode INTEGER,
   progress REAL, source TEXT NOT NULL, occurred_at TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -52,3 +84,4 @@ export function openDb(file: string) {
 export type Db = ReturnType<typeof openDb>;
 export type EventRow = typeof events.$inferSelect;
 export type MediaRow = typeof media.$inferSelect;
+export type ConnectionRow = typeof connections.$inferSelect;

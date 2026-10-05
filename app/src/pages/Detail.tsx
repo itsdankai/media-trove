@@ -69,7 +69,7 @@ export function Detail() {
           <ul className="divide-y rounded-xl border bg-card text-sm">
             {events.map((e) => (
               <li key={e.id} className="flex justify-between gap-4 px-4 py-2.5">
-                <span>{describe(e)}</span>
+                <span>{describe(e, m.kind)}</span>
                 <time className="text-muted-foreground">{new Date(e.occurredAt).toLocaleString()}</time>
               </li>
             ))}

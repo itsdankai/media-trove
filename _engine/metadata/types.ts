@@ -24,6 +24,23 @@ export interface MetadataProvider {
   search(kind: MediaKind, q: string): Promise<SearchResult[]>;
   details(key: string): Promise<MediaInfo>;
   season?(key: string, n: number): Promise<Episode[]>;
+  /** Turns a plugin's description of a title (imdb id, asin, title…) into a media key, or null. */
+  resolve?(ref: MediaRef): Promise<string | null>;
+}
+
+export type { MediaRef } from "../../plugins/_sdk/index.ts";
+
+import type { MediaRef } from "../../plugins/_sdk/index.ts";
+
+/** Loose title match: same words, ignoring case, punctuation and a leading "the". */
+export function sameTitle(a: string, b: string) {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/^the /, "")
+      .trim();
+  return norm(a) === norm(b) || norm(a).startsWith(`${norm(b)} `) || norm(b).startsWith(`${norm(a)} `);
 }
 
 /** Thrown when a provider can't work yet (missing key) — the API turns it into a 503 with this message. */

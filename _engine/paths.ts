@@ -3,7 +3,8 @@ import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = projectRoot;
 
 export const dataDir = process.env.MEDIATROVE_DATA_DIR ?? join(root, "_private", "data");
 export const dbPath = join(dataDir, "mediatrove.db");
