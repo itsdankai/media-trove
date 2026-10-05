@@ -1,0 +1,73 @@
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link } from "react-router";
+import { PosterCard, PosterGrid } from "@/components/PosterCard";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { api, completion, kindLabel, type MediaKind, statusLabel, type TrackState } from "@/lib/api";
+
+// Full filters (genre, year, rating) arrive in phase 6; status is enough to start.
+const statuses: Record<MediaKind, TrackState["status"][]> = {
+  movie: ["completed"],
+  show: ["watching", "completed"],
+  audiobook: ["listening", "finished"],
+};
+
+export function Library({ kind }: { kind: MediaKind }) {
+  const [status, setStatus] = useState<string>("all");
+  const { data, isLoading } = useQuery({ queryKey: ["library", kind], queryFn: () => api.library(kind) });
+  const items = (data ?? []).filter((i) => status === "all" || i.state.status === status);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{kindLabel[kind]}</h1>
+          <p className="text-sm text-muted-foreground">{data ? `${data.length} tracked` : " "}</p>
+        </div>
+        {statuses[kind].length > 1 && (
+          <Tabs value={status} onValueChange={setStatus}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              {statuses[kind].map((s) => (
+                <TabsTrigger key={s} value={s}>
+                  {statusLabel[s]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        )}
+      </div>
+
+      {!isLoading && items.length === 0 && (
+        <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+          Nothing here yet. Use the search bar to find something, then track it.{" "}
+          <Link to="/search" className="text-primary underline-offset-4 hover:underline">
+            Search
+          </Link>
+        </div>
+      )}
+
+      <PosterGrid>
+        {items.map(({ media, state }) => (
+          <PosterCard
+            key={media.key}
+            to={`/media/${media.key}`}
+            kind={media.kind}
+            title={media.title}
+            poster={media.poster}
+            sub={subline(media.kind, state, media.extra.subtitle ?? null, media.year)}
+            progress={completion(media, state)}
+            badge={state.status === "completed" || state.status === "finished" ? undefined : statusLabel[state.status]}
+          />
+        ))}
+      </PosterGrid>
+    </div>
+  );
+}
+
+function subline(kind: MediaKind, s: TrackState, subtitle: string | null, year: number | null) {
+  if (kind === "show") return `${s.watchedEpisodes?.length ?? 0} episodes watched`;
+  if (kind === "audiobook")
+    return s.status === "finished" ? subtitle : `${Math.round((s.progress ?? 0) * 100)}% · ${subtitle ?? ""}`;
+  return s.watchCount && s.watchCount > 1 ? `Watched ${s.watchCount}×` : year ? String(year) : null;
+}

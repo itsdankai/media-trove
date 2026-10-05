@@ -6,8 +6,8 @@
 # Policy: Workspace/_system/private-data-policy.md ("The second layer: a pre-push hook").
 
 MAX_BYTES=2000000
-ALLOW='^(README.md|LICENSE|.gitignore|.gitattributes|.githooks/.*|_engine/.*|docs/.*|.github/.*)$'
-ASSETS='^_engine/.*/assets/'
+ALLOW='^(README\.md|LICENSE|\.gitignore|\.gitattributes|\.dockerignore|\.env\.example|package\.json|pnpm-lock\.yaml|tsconfig\.json|vite\.config\.ts|vitest\.config\.ts|biome\.json|components\.json|Dockerfile|compose\.yaml|\.githooks/.*|_engine/.*|app/(index\.html|src/.*)|docs/.*|\.github/.*)$'
+ASSETS='^(_engine|app)/.*/assets/'
 zero=0000000000000000000000000000000000000000
 fail=0
 
