@@ -70,8 +70,18 @@ export function createApp(
       list,
       m.extra.airedEpisodes as number | undefined,
       getSettings(db).watchedThreshold,
-      m.kind === "show" && typeof m.extra.status === "string" && !["Ended", "Canceled"].includes(m.extra.status),
+      moreComing(m),
     );
+
+  /**
+   * "Caught up" means an episode you haven't seen is actually on its way: one is scheduled, or the
+   * current season still has unaired episodes. A finished season with nothing announced reads as
+   * Completed, even when TMDB calls the show "Returning" (builder, 2026-10-06: Furious S1).
+   */
+  const moreComing = (m: Pick<MediaRow, "kind" | "extra">) =>
+    m.kind === "show" &&
+    (Boolean(m.extra.nextEpisode) ||
+      ((m.extra.totalEpisodes as number) ?? 0) > ((m.extra.airedEpisodes as number) ?? 0));
 
   const needPlugins = () => {
     if (!plugins) throw new ProviderUnavailable("Plugins are not enabled in this instance.");

@@ -1,0 +1,27 @@
+name: Bug report
+description: Something in MediaTrove isn't working the way it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where in the app?
+      placeholder: e.g. Shows page, Import page, the Stremio connection
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which image tag you run (latest, 0.1.0…), or the commit if you built it yourself.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: "From `docker compose logs mediatrove`. Remove anything private (emails, server addresses) first."
+      render: text
