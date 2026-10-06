@@ -47,10 +47,14 @@ export function Layout() {
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
       <aside className="hidden md:flex flex-col gap-1 border-r bg-card/40 p-4 sticky top-0 h-dvh">
-        <div className="flex items-center gap-2 px-2 pb-6 pt-1">
+        <Link
+          to="/"
+          className="mb-5 flex items-center gap-2 rounded-lg px-2 pb-1 pt-1 hover:opacity-90"
+          aria-label="MediaTrove home"
+        >
           <Gem className="size-6 text-primary" />
           <span className="text-lg font-semibold tracking-tight">MediaTrove</span>
-        </div>
+        </Link>
         {[...nav, ...navMore].map(({ to, label, icon: Icon, end }, i) => (
           <NavLink
             key={to}

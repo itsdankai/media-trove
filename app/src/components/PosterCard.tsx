@@ -46,24 +46,25 @@ type Props = {
   badge?: string;
 };
 
+// Nothing is drawn on top of the artwork: the status and progress sit underneath it.
 export function PosterCard({ to, kind, title, poster, sub, progress, badge }: Props) {
+  const showBar = progress != null && progress > 0 && progress < 1;
   return (
     <Link to={to} className="group block focus:outline-none">
-      <div className="relative transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring rounded-lg">
+      <div className="rounded-lg transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring">
         <Poster src={poster} kind={kind} title={title} className="shadow-lg shadow-black/30" />
-        {badge && (
-          <span className="absolute left-2 top-2 rounded-md bg-background/85 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide backdrop-blur">
-            {badge}
-          </span>
-        )}
-        {progress != null && progress > 0 && (
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
-            <div className="h-full bg-primary" style={{ width: `${Math.round(progress * 100)}%` }} />
-          </div>
-        )}
       </div>
-      <p className="mt-2 line-clamp-1 text-sm font-medium">{title}</p>
-      {sub && <p className="line-clamp-1 text-xs text-muted-foreground">{sub}</p>}
+      <div className={cn("mt-1.5 h-1 overflow-hidden rounded-full bg-muted", !showBar && "invisible")}>
+        <div className="h-full bg-primary" style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />
+      </div>
+      <p className="mt-1.5 line-clamp-1 text-sm font-medium">{title}</p>
+      {(badge || sub) && (
+        <p className="line-clamp-1 text-xs text-muted-foreground">
+          {badge && <span className="font-medium text-primary">{badge}</span>}
+          {badge && sub && " · "}
+          {sub}
+        </p>
+      )}
     </Link>
   );
 }

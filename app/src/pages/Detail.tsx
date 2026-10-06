@@ -40,15 +40,14 @@ export function Detail() {
       <Button variant="ghost" size="sm" className="-ml-2 -mb-6" onClick={back}>
         <ArrowLeft /> Back
       </Button>
-      <section className="relative -mx-4 overflow-hidden px-4 pt-6 pb-8 md:-mx-8 md:px-8">
-        {m.extra.backdrop && (
-          <img
-            src={m.extra.backdrop}
-            alt=""
-            className="absolute inset-0 -z-10 size-full object-cover opacity-20 blur-sm"
-          />
-        )}
-        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-background via-background/70 to-transparent" />
+      <section className="relative isolate -mx-4 px-4 pt-6 pb-8 md:-mx-8 md:px-8">
+        {/* Only the blurred backdrop is clipped; the poster itself never is. */}
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          {m.extra.backdrop && (
+            <img src={m.extra.backdrop} alt="" className="size-full object-cover opacity-20 blur-sm" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />
+        </div>
         <div className="flex flex-col gap-6 sm:flex-row">
           <Poster
             src={m.poster}
