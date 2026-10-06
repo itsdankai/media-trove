@@ -80,7 +80,12 @@ export type Manifest = {
   homepage?: string;
   connect: { fields: Field[]; note?: string };
   sync: { intervalSeconds: number };
+  capabilities?: { write?: boolean };
 };
+
+export type SyncMode = "off" | "add" | "full";
+export type PushSummary = { sent: number; ok: number; notFound: number; failed: number; at: number; error?: string };
+export type PushPreview = { watched: number; unwatched: number; titles: number; sample: string[] };
 
 export type CatalogEntry = {
   id: string;
@@ -105,6 +110,9 @@ export type Connection = {
   lastSummary: SyncSummary | null;
   syncing: boolean;
   followUnmarks: boolean;
+  syncMode: SyncMode;
+  lastPushSummary: PushSummary | null;
+  pushing: boolean;
   createdAt: number;
 };
 
@@ -155,8 +163,13 @@ export const api = {
   manifest: (id: string) => call<Manifest>(`/api/plugins/${id}/manifest`),
   pluginStatuses: () => call<Record<string, PluginStatus>>("/api/plugins"),
   connections: () => call<Connection[]>("/api/connections"),
-  connect: (pluginId: string, fields: Record<string, string>) =>
-    send<{ id: string; accountName: string }>("POST", "/api/connections", { pluginId, fields }),
+  setSyncMode: (id: string, syncMode: SyncMode, fromNow = false) =>
+    send<{ ok: true }>("PATCH", `/api/connections/${id}`, { syncMode, fromNow }),
+  pushPreview: (id: string, mode: "add" | "full") =>
+    call<PushPreview>(`/api/connections/${id}/push-preview?mode=${mode}`),
+  pushNow: (id: string) => send<PushSummary | null>("POST", `/api/connections/${id}/push`),
+  connect: (pluginId: string, fields: Record<string, string>, syncMode?: SyncMode) =>
+    send<{ id: string; accountName: string }>("POST", "/api/connections", { pluginId, fields, syncMode }),
   syncNow: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/sync`),
   resync: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/resync`),
   disconnect: (id: string) => fetch(`/api/connections/${id}`, { method: "DELETE" }),

@@ -7,8 +7,10 @@ self-hosted Nuvio server).
   stored), the profile number (1 is the main profile), and the server if you self-host.
 - **Discovery:** the plugin reads the server's public client settings from `/.well-known/nuvio`, so
   only the server address is needed.
-- **Read-only:** only the `sync_pull_watched_items`, `sync_pull_watch_progress` and
-  `sync_pull_profiles` functions can be called. Anything else is refused in code.
+- **Reads** with `sync_pull_watched_items`, `sync_pull_watch_progress` and `sync_pull_profiles`.
+- **Keeping Nuvio in sync** (only if you choose it): `sync_push_watched_items` to mark and
+  `sync_delete_watched_items` to unmark, the same rows the Nuvio apps write, labelled with origin
+  `mediatrove`. Every other function is refused in code.
 - **Matching:** items keyed by IMDb id (`tt…`) are matched through TMDB. Other ids (Kitsu, etc.) are
   skipped for now and counted as "couldn't be matched".
 - **Risk:** Nuvio's sync functions aren't a published API. If Nuvio changes them, this plugin needs updating.

@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, RotateCcw, Store, Unplug } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { SyncModePicker } from "@/components/SyncModePicker";
 import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { api, type Connection, type PluginStatus, timeAgo } from "@/lib/api";
+import { api, type Connection, type PluginStatus, type SyncMode, timeAgo } from "@/lib/api";
 
 export function Settings() {
   const qc = useQueryClient();
@@ -143,11 +144,114 @@ function Connections() {
                   </span>
                 </span>
               </label>
+              <KeepInSync c={c} app={name(c.pluginId)} onChanged={refresh} />
             </Card>
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The sync mode for apps that can be written to. Turning it on first shows what would be sent, so
+ * nothing lands in the app by surprise; switching off, or between Add only and Full, applies at once.
+ */
+function KeepInSync({ c, app, onChanged }: { c: Connection; app: string; onChanged: () => void }) {
+  const { data: manifest } = useQuery({ queryKey: ["manifest", c.pluginId], queryFn: () => api.manifest(c.pluginId) });
+  const [pending, setPending] = useState<"add" | "full" | null>(null);
+  const preview = useQuery({
+    queryKey: ["push-preview", c.id, pending],
+    queryFn: () => api.pushPreview(c.id, pending as "add" | "full"),
+    enabled: pending !== null,
+    staleTime: 0,
+  });
+  const set = useMutation({
+    mutationFn: ({ m, fromNow = false }: { m: SyncMode; fromNow?: boolean }) => api.setSyncMode(c.id, m, fromNow),
+    onSettled: () => {
+      setPending(null);
+      onChanged();
+    },
+  });
+  if (!manifest?.capabilities?.write) return null;
+
+  function choose(m: SyncMode) {
+    if (m === c.syncMode) return;
+    if (c.syncMode === "off" && m !== "off") setPending(m);
+    else set.mutate({ m });
+  }
+
+  const p = preview.data;
+  return (
+    <div className="space-y-2 border-t pt-3">
+      <SyncModePicker
+        app={app}
+        value={pending ?? (c.syncMode as SyncMode)}
+        onChange={choose}
+        disabled={set.isPending}
+      />
+      {pending && (
+        <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+          {preview.isLoading && <p className="text-muted-foreground">Checking what would change in {app}…</p>}
+          {preview.error && <p className="text-destructive">{preview.error.message}</p>}
+          {p && (
+            <p>
+              {p.watched === 0
+                ? `${app} already has everything MediaTrove has. From now on, new marks will be added there.`
+                : `This marks ${p.watched} movies and episodes watched in ${app}, across ${p.titles} titles${
+                    p.sample.length ? ` (${p.sample.join(", ")}${p.titles > p.sample.length ? "…" : ""})` : ""
+                  }. Titles ${app} doesn't have are skipped.`}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {p && p.watched > 0 ? (
+              <>
+                <Button size="sm" onClick={() => set.mutate({ m: pending })} disabled={set.isPending}>
+                  Turn on and add these
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => set.mutate({ m: pending, fromNow: true })}
+                  disabled={set.isPending}
+                >
+                  Only new marks from now on
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => set.mutate({ m: pending })} disabled={!p || set.isPending}>
+                Turn on
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => setPending(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      <PushLine c={c} app={app} />
+    </div>
+  );
+}
+
+function PushLine({ c, app }: { c: Connection; app: string }) {
+  const s = c.lastPushSummary;
+  if (c.syncMode === "off") return null;
+  if (c.pushing) return <p className="text-xs text-muted-foreground">Sending changes to {app}…</p>;
+  if (!s) return <p className="text-xs text-muted-foreground">Changes go to {app} after the next sync.</p>;
+  if (s.error)
+    return (
+      <p className="text-xs text-destructive">
+        Couldn't update {app}: {s.error}
+      </p>
+    );
+  return (
+    <p className="text-xs text-muted-foreground">
+      Last sent to {app} {timeAgo(s.at)}
+      {` · ${s.ok} updated`}
+      {s.notFound > 0 && ` · ${s.notFound} not in ${app}`}
+      {s.failed > 0 && ` · ${s.failed} failed (will retry)`}
+    </p>
   );
 }
 

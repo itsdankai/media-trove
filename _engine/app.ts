@@ -25,6 +25,7 @@ import { type MediaKind, type MetadataProvider, mediaKinds, ProviderUnavailable,
 import { type PluginHost, PluginUserError } from "./plugins/host.ts";
 import { getSettings, updateSettings } from "./settings.ts";
 import type { Sync } from "./sync.ts";
+import { syncModes, type Writeback } from "./writeback.ts";
 
 const kindSchema = z.enum(mediaKinds);
 
@@ -37,7 +38,7 @@ const eventSchema = z.object({
   occurredAt: z.iso.datetime({ offset: true }).optional(),
 });
 
-export type Plugins = { host: PluginHost; sync: Sync };
+export type Plugins = { host: PluginHost; sync: Sync; writeback?: Writeback };
 
 export function createApp(
   db: Db,
@@ -85,6 +86,9 @@ export function createApp(
     lastSummary: c.lastSummary ? JSON.parse(c.lastSummary) : null,
     syncing: plugins?.sync.isRunning(c.id) ?? false,
     followUnmarks: c.followUnmarks,
+    syncMode: c.syncMode,
+    lastPushSummary: c.lastPushSummary ? JSON.parse(c.lastPushSummary) : null,
+    pushing: plugins?.writeback?.isPushing(c.id) ?? false,
     createdAt: c.createdAt,
   });
 
@@ -164,6 +168,7 @@ export function createApp(
             db,
             list.map((e) => ({ ...e, source: MANUAL, occurredAt: e.occurredAt ?? now })),
           );
+          plugins?.writeback?.pushAllSoon(); // apps kept in sync hear about it within seconds
           return c.json({ inserted }, 201);
         },
       )
@@ -305,11 +310,19 @@ export function createApp(
 
       .post(
         "/api/connections",
-        zValidator("json", z.object({ pluginId: z.string().min(1), fields: z.record(z.string(), z.string()) })),
+        zValidator(
+          "json",
+          z.object({
+            pluginId: z.string().min(1),
+            fields: z.record(z.string(), z.string()),
+            syncMode: z.enum(syncModes).optional(),
+          }),
+        ),
         async (c) => {
           const { sync } = needPlugins();
-          const { pluginId, fields } = c.req.valid("json");
-          const row = await sync.connect(pluginId, fields);
+          const { pluginId, fields, syncMode } = c.req.valid("json");
+          // Pull first: the first sync brings the app's marks in, then its afterSync push runs.
+          const row = await sync.connect(pluginId, fields, syncMode ?? "off");
           sync.syncNow(row.id).catch(() => {}); // first sync runs in the background
           return c.json({ id: row.id, accountName: row.accountName }, 201);
         },
@@ -333,13 +346,51 @@ export function createApp(
         }
       })
 
-      .patch("/api/connections/:id", zValidator("json", z.object({ followUnmarks: z.boolean() })), (c) => {
-        needPlugins();
-        db.update(connections)
-          .set({ followUnmarks: c.req.valid("json").followUnmarks })
-          .where(eq(connections.id, c.req.param("id")))
-          .run();
-        return c.json({ ok: true });
+      .patch(
+        "/api/connections/:id",
+        zValidator(
+          "json",
+          z.object({
+            followUnmarks: z.boolean().optional(),
+            syncMode: z.enum(syncModes).optional(),
+            fromNow: z.boolean().optional(), // turning on: don't send the past, only new marks
+          }),
+        ),
+        async (c) => {
+          const { host, writeback } = needPlugins();
+          const id = c.req.param("id");
+          const { followUnmarks, syncMode, fromNow } = c.req.valid("json");
+          if (followUnmarks !== undefined)
+            db.update(connections).set({ followUnmarks }).where(eq(connections.id, id)).run();
+          if (syncMode !== undefined) {
+            const conn = db.select().from(connections).where(eq(connections.id, id)).get();
+            if (!conn) return c.notFound();
+            const canWrite = Boolean((await host.manifest(conn.pluginId)).capabilities?.write);
+            if (syncMode !== "off" && (!canWrite || !writeback))
+              return c.json({ error: "This app can't be kept in sync yet." }, 400);
+            if (fromNow && syncMode !== "off" && conn.syncMode === "off") await writeback?.settleBacklog(id, syncMode);
+            writeback?.setMode(id, syncMode);
+            if (syncMode !== "off") writeback?.push(id).catch((e) => console.error("push:", e));
+          }
+          return c.json({ ok: true });
+        },
+      )
+
+      // What turning on a sync mode would send to the app right now (nothing is sent).
+      .get(
+        "/api/connections/:id/push-preview",
+        zValidator("query", z.object({ mode: z.enum(["add", "full"]) })),
+        async (c) => {
+          const { writeback } = needPlugins();
+          if (!writeback) return c.json({ error: "not supported" }, 400);
+          return c.json(await writeback.preview(c.req.param("id"), c.req.valid("query").mode));
+        },
+      )
+
+      .post("/api/connections/:id/push", async (c) => {
+        const { writeback } = needPlugins();
+        if (!writeback) return c.json({ error: "not supported" }, 400);
+        return c.json(await writeback.push(c.req.param("id")));
       })
 
       .delete("/api/connections/:id", (c) => {

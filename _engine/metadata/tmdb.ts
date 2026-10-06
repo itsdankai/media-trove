@@ -78,10 +78,12 @@ export function tmdbProvider(apiKey = process.env.TMDB_API_KEY, fetchFn: typeof 
 
     async details(key): Promise<MediaInfo> {
       const { kind, id } = parseKey(key);
-      const r = await get(`/${tmdbType(kind)}/${id}`);
+      const r = await get(`/${tmdbType(kind)}/${id}`, { append_to_response: "external_ids" });
       const base = { ...toResult(kind, r), genres: (r.genres as Json[]).map((g) => g.name) };
+      // Other services' ids, so writing back to an app can name the title its way (Stremio uses IMDb).
+      const ids = { imdb: r.external_ids?.imdb_id || null, tvdb: r.external_ids?.tvdb_id ?? null };
       if (kind === "movie")
-        return { ...base, extra: { runtime: r.runtime ?? null, backdrop: img(r.backdrop_path, "w1280") } };
+        return { ...base, extra: { ...ids, runtime: r.runtime ?? null, backdrop: img(r.backdrop_path, "w1280") } };
       const seasons: Season[] = (r.seasons as Json[])
         .filter((s) => s.season_number > 0) // season 0 is specials; left out of totals
         .map((s) => ({
@@ -94,6 +96,7 @@ export function tmdbProvider(apiKey = process.env.TMDB_API_KEY, fetchFn: typeof 
       return {
         ...base,
         extra: {
+          ...ids,
           backdrop: img(r.backdrop_path, "w1280"),
           seasons,
           totalEpisodes: seasons.reduce((n, s) => n + s.episodeCount, 0),

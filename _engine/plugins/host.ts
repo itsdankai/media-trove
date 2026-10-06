@@ -31,7 +31,7 @@ export class PluginUserError extends Error {}
 export interface PluginHost {
   catalog(): Promise<CatalogEntry[]>;
   manifest(id: string): Promise<Manifest>;
-  call<T>(id: string, path: "/connect" | "/sync", body: unknown): Promise<T>;
+  call<T>(id: string, path: "/connect" | "/sync" | "/push", body: unknown): Promise<T>;
   statuses(): Record<string, PluginStatus>;
   addCustom?(url: string): Promise<Manifest>;
 }
@@ -184,7 +184,7 @@ export class ProcessHost implements PluginHost {
     return m;
   }
 
-  async call<T>(id: string, path: "/connect" | "/sync", body: unknown): Promise<T> {
+  async call<T>(id: string, path: "/connect" | "/sync" | "/push", body: unknown): Promise<T> {
     const base = await this.base(id);
     const r = await fetch(`${base}${path}`, {
       method: "POST",

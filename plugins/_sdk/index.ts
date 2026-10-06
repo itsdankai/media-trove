@@ -3,10 +3,13 @@
 //   GET  /manifest.json   who it is and which fields its connect form needs
 //   POST /connect         { fields }               -> { account, credentials }
 //   POST /sync            { credentials, cursor }  -> { events, cursor, credentials? }
+//   POST /push            { credentials, items }   -> { results, credentials? }   (optional, see below)
 //
 // Plugins are stateless: MediaTrove stores the credentials (encrypted) and the cursor, and sends
 // them back on every sync. Credentials are what the plugin chooses to keep (tokens), never the
 // raw password the user typed. Plugins only report what happened; MediaTrove decides what it means.
+// A plugin that can also change its app (mark things watched there) sets capabilities.write and
+// serves /push; MediaTrove only calls it for connections the user set to keep in sync.
 // Full docs: docs/plugins.md
 
 import { serve } from "@hono/node-server";
@@ -34,6 +37,8 @@ export type Manifest = {
   homepage?: string;
   connect: { fields: Field[]; note?: string };
   sync: { intervalSeconds: number };
+  /** write: this plugin serves POST /push and can mark things watched/unwatched in its app. */
+  capabilities?: { write?: boolean };
 };
 
 /** How a plugin names a title. Give every id you have; MediaTrove matches on the best one. */
@@ -66,6 +71,24 @@ export type ConnectResult = { account: { name: string }; credentials: unknown };
 /** `more: true` asks MediaTrove to call /sync again right away (big first syncs run in rounds). */
 export type SyncResult = { events: PluginEvent[]; cursor: unknown; credentials?: unknown; more?: boolean };
 
+/** One change for the plugin to make in its app. Episodes carry season and episode. */
+export type PushItem = {
+  media: MediaRef;
+  action: "watched" | "unwatched";
+  season?: number;
+  episode?: number;
+  occurredAt: string; // when it happened in MediaTrove; use it as the watched date where the app keeps one
+};
+
+/**
+ * One result per item, same order. notFound: the app doesn't have that title (MediaTrove won't ask
+ * again until something changes). Any other failure: ok false with an error, and it's retried later.
+ */
+export type PushResult = {
+  results: { ok: boolean; notFound?: boolean; error?: string }[];
+  credentials?: unknown;
+};
+
 /** Thrown for problems the user can fix (wrong password, bad URL). Shown to them as-is. */
 export class UserError extends Error {}
 
@@ -76,7 +99,10 @@ export function definePlugin<C>(p: {
     credentials: C,
     cursor: unknown,
   ): Promise<{ events: PluginEvent[]; cursor: unknown; credentials?: C; more?: boolean }>;
+  /** Only for plugins with manifest.capabilities.write. */
+  push?(credentials: C, items: PushItem[]): Promise<{ results: PushResult["results"]; credentials?: C }>;
 }) {
+  if (p.manifest.capabilities?.write && !p.push) throw new Error(`${p.manifest.id}: capabilities.write needs push()`);
   return new Hono()
     .onError((err, c) => {
       const user = err instanceof UserError;
@@ -91,6 +117,11 @@ export function definePlugin<C>(p: {
     .post("/sync", async (c) => {
       const { credentials, cursor } = await c.req.json<{ credentials: C; cursor: unknown }>();
       return c.json(await p.sync(credentials, cursor ?? null));
+    })
+    .post("/push", async (c) => {
+      if (!p.push) return c.json({ error: "This plugin can't write.", user: false }, 404);
+      const { credentials, items } = await c.req.json<{ credentials: C; items: PushItem[] }>();
+      return c.json(await p.push(credentials, items ?? []));
     });
 }
 
