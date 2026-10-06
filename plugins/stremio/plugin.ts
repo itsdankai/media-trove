@@ -89,15 +89,16 @@ export function orderVideos(videos: Video[]) {
 /**
  * Decodes Stremio's watched field, "{anchorVideoId}:{anchorLength}:{base64 zlib bitfield}".
  * The anchor is the last watched video when it was saved; if the episode list grew since, the bits
- * are shifted so the anchor lines up again. Returns the ids of watched videos.
+ * are shifted so the anchor lines up again. Returns the ids of watched videos, or null when it
+ * can't be read (the anchor episode is gone): "unknown", which is not the same as "none watched".
  */
-export function decodeWatched(serialized: string, videoIds: string[]): string[] {
+export function decodeWatched(serialized: string, videoIds: string[]): string[] | null {
   const parts = serialized.split(":");
-  if (parts.length < 3) return [];
+  if (parts.length < 3) return null;
   const packed = parts.pop() as string;
   const anchorLength = Number.parseInt(parts.pop() as string, 10);
   const anchorIdx = videoIds.indexOf(parts.join(":"));
-  if (anchorIdx === -1) return [];
+  if (anchorIdx === -1) return null;
   const bytes = inflateSync(Buffer.from(packed, "base64"));
   const offset = anchorLength - 1 - anchorIdx;
   const bit = (i: number) => i >= 0 && i < anchorLength && ((bytes[i >> 3] ?? 0) & (1 << (i % 8))) !== 0;
@@ -206,7 +207,9 @@ export async function itemEvents(
     // First sight of an already-watched movie counts once; after that, each increase is a new viewing.
     const newWatches = known === 0 ? Math.min(count, 1) : Math.max(0, count - known);
     for (let i = 0; i < newWatches; i++) events.push({ media, kind: "watched", occurredAt: offsetIso(at, -i) });
-    cursor.counts[item._id] = Math.max(count, known);
+    // Marked unwatched in Stremio: its count drops back to zero.
+    if (known > 0 && count === 0) events.push({ media, kind: "unwatched", occurredAt: at });
+    cursor.counts[item._id] = count === 0 ? 0 : Math.max(count, known);
     // "Mark as watched" leaves the old position in place; don't report it as a new viewing.
     if (progress > 0 && newWatches === 0) events.push({ media, kind: "progress", progress, occurredAt: at });
     return events;
@@ -218,13 +221,24 @@ export async function itemEvents(
     const videos = await fetchVideos(item._id);
     const already = new Set(cursor.episodes[item._id] ?? []);
     const watched = decodeWatched(s.watched, orderVideos(videos));
-    for (const id of watched) {
-      const ep = parseVideoId(id);
-      if (ep && ep.season > 0 && !already.has(id)) {
-        events.push({ media, kind: "watched", season: ep.season, episode: ep.episode, occurredAt: at });
+    // Unreadable (episode list changed under it): report nothing rather than guess at unmarks.
+    if (watched) {
+      const now = new Set(watched);
+      for (const id of watched) {
+        const ep = parseVideoId(id);
+        if (ep && ep.season > 0 && !already.has(id)) {
+          events.push({ media, kind: "watched", season: ep.season, episode: ep.episode, occurredAt: at });
+        }
       }
+      // Episodes that were watched last time and aren't now were unmarked in Stremio.
+      for (const id of already) {
+        const ep = parseVideoId(id);
+        if (ep && ep.season > 0 && !now.has(id)) {
+          events.push({ media, kind: "unwatched", season: ep.season, episode: ep.episode, occurredAt: at });
+        }
+      }
+      cursor.episodes[item._id] = watched;
     }
-    cursor.episodes[item._id] = [...new Set([...already, ...watched])];
   }
   const cur = s.video_id ? parseVideoId(s.video_id) : null;
   if (cur && cur.season > 0 && progress > 0) {

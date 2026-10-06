@@ -27,6 +27,42 @@
       "tags": ["audiobooks", "server", "self-hosted"],
       "author": "MediaTrove",
       "bundled": true
+    },
+    {
+      "id": "plex",
+      "name": "Plex",
+      "description": "Track movies and episodes you watch on your Plex server.",
+      "kinds": ["movie", "show"],
+      "tags": ["media server", "server", "self-hosted"],
+      "author": "MediaTrove",
+      "bundled": true
+    },
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "description": "Track movies and episodes you watch on your Jellyfin server.",
+      "kinds": ["movie", "show"],
+      "tags": ["media server", "server", "self-hosted"],
+      "author": "MediaTrove",
+      "bundled": true
+    },
+    {
+      "id": "emby",
+      "name": "Emby",
+      "description": "Track movies and episodes you watch on your Emby server.",
+      "kinds": ["movie", "show"],
+      "tags": ["media server", "server", "self-hosted"],
+      "author": "MediaTrove",
+      "bundled": true
+    },
+    {
+      "id": "kodi",
+      "name": "Kodi",
+      "description": "Track movies and episodes you watch in Kodi.",
+      "kinds": ["movie", "show"],
+      "tags": ["player", "media center"],
+      "author": "MediaTrove",
+      "bundled": true
     }
   ]
 }

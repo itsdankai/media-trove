@@ -50,7 +50,8 @@ export function Home() {
               kind={media.kind}
               title={media.title}
               poster={media.poster}
-              sub={statusLabel[state.status]}
+              badge={statusLabel[state.status]}
+              sub={media.year ? String(media.year) : null}
               progress={completion(media, state)}
             />
           ))}

@@ -55,7 +55,7 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
           cursor: conn.cursor,
         });
         const { list, unmatched } = await toEvents(conn, res.events);
-        const { inserted, refused } = appendEvents(db, list);
+        const { inserted, refused } = appendEvents(db, list, Date.now(), { followUnmarks: conn.followUnmarks });
         summary.received += res.events.length;
         summary.added += inserted;
         summary.unmatched += unmatched;

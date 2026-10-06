@@ -6,6 +6,7 @@ import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { api, type Connection, type PluginStatus, timeAgo } from "@/lib/api";
 
 export function Settings() {
@@ -66,6 +67,10 @@ function Connections() {
   };
   const sync = useMutation({ mutationFn: api.syncNow, onSettled: refresh });
   const resync = useMutation({ mutationFn: api.resync, onSettled: refresh });
+  const follow = useMutation({
+    mutationFn: ({ id, on }: { id: string; on: boolean }) => api.setFollowUnmarks(id, on),
+    onSettled: refresh,
+  });
   const remove = useMutation({ mutationFn: api.disconnect, onSettled: refresh });
 
   return (
@@ -124,6 +129,19 @@ function Connections() {
                 </Button>
               </div>
               <SyncLine c={c} />
+              <label className="flex items-center gap-3 text-sm">
+                <Switch
+                  checked={c.followUnmarks}
+                  onCheckedChange={(on) => follow.mutate({ id: c.id, on })}
+                  aria-label={`Also remove things I unmark in ${name(c.pluginId)}`}
+                />
+                <span>
+                  Also remove things I unmark in {name(c.pluginId)}
+                  <span className="block text-xs text-muted-foreground">
+                    Only what {name(c.pluginId)} itself reported. Your own marks and other apps' are kept.
+                  </span>
+                </span>
+              </label>
             </Card>
           </li>
         ))}

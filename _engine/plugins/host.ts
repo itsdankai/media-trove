@@ -67,9 +67,13 @@ export class ProcessHost implements PluginHost {
         // offline or not published yet: fall back to the copy shipped with the app
       }
     }
-    list ??= (
+    // The online catalog adds community plugins; plugins shipped with this build are always listed,
+    // even before the online catalog knows about them.
+    const shipped = (
       JSON.parse(readFileSync(join(this.root, "plugins", "catalog.json"), "utf8")) as { plugins: CatalogEntry[] }
     ).plugins;
+    const remote = list ?? [];
+    list = [...remote, ...shipped.filter((s) => !remote.some((r) => r.id === s.id))];
     // Only offer bundled plugins this build actually ships.
     list = list.filter((p) => !p.bundled || this.bundledFile(p.id));
     for (const url of this.opts.customUrls ?? []) await this.addCustom(url).catch(() => {});

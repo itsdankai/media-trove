@@ -64,9 +64,9 @@ describe("stremio", () => {
     expect(decodeWatched(field, after)).toEqual(["tt1:1:1", "tt1:1:3"]);
   });
 
-  it("returns nothing if the anchor episode disappeared", () => {
+  it("returns null (unknown) if the anchor episode disappeared", () => {
     const field = encodeWatched(orderVideos(vids(3)), new Set(["tt1:1:3"]));
-    expect(decodeWatched(field, orderVideos(vids(2)))).toEqual([]);
+    expect(decodeWatched(field, orderVideos(vids(2)))).toBeNull();
   });
 
   it("parses video ids", () => {

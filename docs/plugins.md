@@ -53,7 +53,12 @@ from this list.
 }
 ```
 
-- `kind` is `watched`, `progress` (with `progress` from 0 to 1) or `finished` (audiobooks).
+- `kind` is `watched`, `progress` (with `progress` from 0 to 1), `finished` (audiobooks) or `unwatched`.
+  Send `unwatched` when something was unmarked in your service. MediaTrove applies it only if the user
+  lets that connection "follow unmarks" (on by default). Even then, it only cancels what your plugin
+  reported, never the user's own marks or another app's.
+- Servers that only expose "what's played now" can use `plugins/_sdk/snapshot.ts`. It compares
+  snapshots between syncs and produces the right `watched`, `unwatched` and `progress` events.
 - `media` takes every id you have: `tmdb`, `imdb`, `tvdb`, `asin`, `isbn`, plus `title`, `year` and
   `author`. MediaTrove matches on the most specific one.
 - `occurredAt` is when it happened in your service, not when you synced. That's how MediaTrove orders
