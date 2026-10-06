@@ -162,6 +162,46 @@ export const api = {
   disconnect: (id: string) => fetch(`/api/connections/${id}`, { method: "DELETE" }),
   setFollowUnmarks: (id: string, followUnmarks: boolean) =>
     send<{ ok: true }>("PATCH", `/api/connections/${id}`, { followUnmarks }),
+  imports: () => call<{ sources: ImportSourceInfo[]; history: ImportRun[]; simklClientId: boolean }>("/api/imports"),
+  importFile: (source: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return call<ImportJob>(`/api/imports/${source}`, { method: "POST", body });
+  },
+  importUser: (source: string, username: string) => send<ImportJob>("POST", `/api/imports/${source}`, { username }),
+  importJob: (id: string) => call<ImportJob>(`/api/imports/jobs/${id}`),
+  simklPin: (clientId?: string) =>
+    send<{ userCode: string; url: string; expiresIn: number; interval: number }>("POST", "/api/imports/simkl/pin", {
+      clientId,
+    }),
+  simklPinCheck: (code: string) =>
+    send<{ ready: boolean; job?: ImportJob }>("POST", `/api/imports/simkl/pin/${encodeURIComponent(code)}`),
+  removeImport: (source: string) => send<{ removed: number }>("DELETE", `/api/imports/${source}`),
+};
+
+export type ImportSourceInfo = { id: string; name: string; input: "file" | "username" | "simkl" };
+export type ImportSummary = { received: number; added: number; titles: number; unmatched: number; skipped: number };
+export type ImportJob = {
+  id: string;
+  source: string;
+  label: string;
+  status: "running" | "done" | "failed";
+  stage: string;
+  done: number;
+  total: number;
+  summary: ImportSummary;
+  unmatchedTitles: string[];
+  notes: string[];
+  error: string | null;
+};
+export type ImportRun = {
+  id: string;
+  source: string;
+  label: string;
+  startedAt: number;
+  finishedAt: number;
+  summary: ImportSummary;
+  error: string | null;
 };
 
 export const kindLabel: Record<MediaKind, string> = { movie: "Movies", show: "Shows", audiobook: "Audiobooks" };

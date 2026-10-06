@@ -129,8 +129,9 @@ function Connections() {
                 </Button>
               </div>
               <SyncLine c={c} />
-              <label className="flex items-center gap-3 text-sm">
+              <label htmlFor={`follow-${c.id}`} className="flex items-center gap-3 text-sm">
                 <Switch
+                  id={`follow-${c.id}`}
                   checked={c.followUnmarks}
                   onCheckedChange={(on) => follow.mutate({ id: c.id, on })}
                   aria-label={`Also remove things I unmark in ${name(c.pluginId)}`}

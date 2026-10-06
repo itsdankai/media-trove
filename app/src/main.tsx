@@ -6,6 +6,7 @@ import { Layout } from "./components/Layout.tsx";
 import { Detail } from "./pages/Detail.tsx";
 import { History } from "./pages/History.tsx";
 import { Home } from "./pages/Home.tsx";
+import { Import } from "./pages/Import.tsx";
 import { Library } from "./pages/Library.tsx";
 import { Marketplace } from "./pages/Marketplace.tsx";
 import { Search } from "./pages/Search.tsx";
@@ -30,6 +31,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="search" element={<Search />} />
             <Route path="media/:key" element={<Detail />} />
             <Route path="marketplace" element={<Marketplace />} />
+            <Route path="import" element={<Import />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="setup" element={<Setup />} />

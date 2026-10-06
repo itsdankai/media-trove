@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import {
   Clapperboard,
+  FileUp,
   Gem,
   Headphones,
   History,
@@ -26,6 +27,7 @@ const nav = [
 
 const navMore = [
   { to: "/marketplace", label: "Marketplace", icon: Store, end: false },
+  { to: "/import", label: "Import", icon: FileUp, end: false },
   { to: "/settings", label: "Settings", icon: SettingsIcon, end: false },
 ];
 
