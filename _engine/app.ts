@@ -12,6 +12,7 @@ import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
 import { fetchMal, parseMal } from "./imports/anime-lists.ts";
 import { parseImdb, parseLetterboxd } from "./imports/csv-exports.ts";
 import { readUpload } from "./imports/files.ts";
+import { parseNetflix } from "./imports/netflix.ts";
 import { createImports, IMPORT_SOURCES, type ImportSource, importSourceId } from "./imports/runner.ts";
 import {
   parseSimkl,
@@ -57,11 +58,13 @@ export function createApp(
     return imports;
   };
   const simklCodes = new Map<string, SimklSignIn>(); // code shown to the user -> its sign-in
-  const fileParsers: Partial<Record<ImportSource, (files: UploadFile[]) => Parsed>> = {
+  // opts: extra form fields some imports take (Netflix: which profile).
+  const fileParsers: Partial<Record<ImportSource, (files: UploadFile[], opts: { profile?: string }) => Parsed>> = {
     trakt: parseTrakt,
     simkl: parseSimklFiles,
     letterboxd: parseLetterboxd,
     imdb: parseImdb,
+    netflix: parseNetflix,
   };
 
   const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) => {
@@ -346,7 +349,8 @@ export function createApp(
           const file = form.file;
           if (!parse || !(file instanceof File)) throw new ImportUserError("Choose the export file to upload.");
           const files = readUpload(file.name, new Uint8Array(await file.arrayBuffer()));
-          const parsed = parse(files); // parsed now, so a wrong file is reported straight away
+          const profile = typeof form.profile === "string" ? form.profile : undefined;
+          const parsed = parse(files, { profile }); // parsed now, so a wrong file is reported straight away
           return c.json(
             imp.start(source, file.name, async () => parsed),
             202,

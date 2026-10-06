@@ -17,6 +17,7 @@ export type CalendarEntry = {
   label: string; // "S2 · E5 · Episode name", "John Wick Collection", or "Red Rising · Pierce Brown"
   poster: string | null;
   tracked: boolean; // a show you watch; false: a new movie or book related to what you track
+  anime: boolean; // shows and movies in the Anime section (the calendar has an Anime filter, like the library)
 };
 
 const TTL = 6 * 60 * 60 * 1000;
@@ -77,6 +78,7 @@ export function createCalendar(db: Db, lib: Library) {
           out.push({
             date: e.airDate,
             kind: "show",
+            anime: m.extra.anime === true,
             key: m.key,
             title: m.title,
             label: [`S${e.season} · E${e.number}`, e.name].filter(Boolean).join(" · "),
@@ -116,6 +118,7 @@ export function createCalendar(db: Db, lib: Library) {
           label: [b.series, b.subtitle].filter(Boolean).join(" · "),
           poster: b.poster,
           tracked: false,
+          anime: false,
         });
       }
     }
@@ -127,9 +130,11 @@ export function createCalendar(db: Db, lib: Library) {
     const movies = tracked("movie");
     const have = new Set(movies.map((m) => m.key));
     const collections = new Map<number, string>();
+    const animeCollections = new Set<number>(); // a franchise you watched as anime: its next film is anime too
     for (const m of movies) {
       const c = m.extra.collection as { id: number; name: string } | null | undefined;
       if (c?.id) collections.set(c.id, c.name);
+      if (c?.id && m.extra.anime === true) animeCollections.add(c.id);
     }
     const provider = lib.providerFor("movie");
     if (!provider.collection) return [];
@@ -145,7 +150,8 @@ export function createCalendar(db: Db, lib: Library) {
             ).catch(() => null),
           ),
       );
-      for (const c of found) {
+      found.forEach((c, j) => {
+        const id = ids[i + j];
         for (const p of c?.parts ?? []) {
           if (!p.releaseDate || p.releaseDate < from || p.releaseDate > to || have.has(p.key)) continue;
           out.push({
@@ -156,9 +162,10 @@ export function createCalendar(db: Db, lib: Library) {
             label: c?.name ?? "",
             poster: p.poster,
             tracked: false,
+            anime: animeCollections.has(id),
           });
         }
-      }
+      });
     }
     return out;
   }

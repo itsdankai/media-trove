@@ -4,8 +4,11 @@
 // comes from the export itself, so running the same import twice stores nothing new.
 import type { PluginEvent } from "../../plugins/_sdk/index.ts";
 
-/** A plugin-style event, or an episode known only by its own IMDb id (IMDb exports). */
-export type ImportEvent = PluginEvent & { episodeImdb?: string };
+/**
+ * A plugin-style event, or an episode known only by its own IMDb id (IMDb exports), or only by its title
+ * (Netflix: episodeTitle, with season when known; fullTitle is tried as a movie if no episode matches).
+ */
+export type ImportEvent = PluginEvent & { episodeImdb?: string; episodeTitle?: string; fullTitle?: string };
 
 /**
  * An anime list entry. Anime trackers count episodes per cour/season entry, not per TMDB season,

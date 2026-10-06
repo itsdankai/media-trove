@@ -1,5 +1,7 @@
-# Builds the MediaTrove image and publishes it to GitHub's container registry (ghcr.io).
-# main -> :latest and :main, a version tag (v0.1.0) -> :0.1.0 and :0.1. Tests run first.
+# Builds the MediaTrove image and publishes it to GitHub's container registry (ghcr.io). Tests run first.
+# Two channels:
+#   main             -> :nightly (and :sha-<commit>)  the newest work, for whoever wants to try it
+#   a tag like v0.1.0 -> :latest, :0.1.0, :0.1         stable: what the README's compose file runs
 name: Docker image
 
 on:
@@ -45,8 +47,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
+            type=raw,value=nightly,enable={{is_default_branch}}
+            type=sha,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
       - uses: docker/build-push-action@v6

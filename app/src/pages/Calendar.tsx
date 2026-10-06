@@ -10,7 +10,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type CalendarEntry } from "@/lib/api";
 
 const ranges = { 30: "30 days", 90: "3 months", 365: "A year" } as const;
-const types = { all: "All", show: "TV", movie: "Movies", audiobook: "Audiobooks" } as const;
+const types = { all: "All", show: "TV", anime: "Anime", movie: "Movies", audiobook: "Audiobooks" } as const;
+/** Same split as the library: anime has its own tab and leaves TV and Movies. */
+const inType = (e: CalendarEntry, t: keyof typeof types) =>
+  t === "all" || (t === "anime" ? e.anime : !e.anime && e.kind === t);
 const newLabel: Record<CalendarEntry["kind"], string> = { show: "", movie: "New movie", audiobook: "New book" };
 
 /** Upcoming episodes of shows you watch, new movies in franchises you've seen, new books by your authors. */
@@ -28,7 +31,7 @@ export function Calendar() {
   };
 
   const { data = [], isLoading, error } = useQuery({ queryKey: ["calendar", days], queryFn: () => api.calendar(days) });
-  const entries = data.filter((e) => type === "all" || e.kind === type);
+  const entries = data.filter((e) => inType(e, type));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -211,8 +214,9 @@ function MonthView({ entries, onNeedMore }: { entries: CalendarEntry[]; onNeedMo
                       title={n > 1 ? `${e.title} · ${n} episodes` : `${e.title} · ${e.label}`}
                       className={cn(
                         "block truncate rounded px-1 py-0.5 hover:bg-accent/60",
-                        e.kind === "show" && "bg-primary/10",
-                        e.kind === "movie" && "bg-sky-500/10",
+                        e.anime && "bg-violet-500/15",
+                        !e.anime && e.kind === "show" && "bg-primary/10",
+                        !e.anime && e.kind === "movie" && "bg-sky-500/10",
                         e.kind === "audiobook" && "bg-emerald-500/10",
                       )}
                     >
@@ -232,6 +236,9 @@ function MonthView({ entries, onNeedMore }: { entries: CalendarEntry[]; onNeedMo
       <p className="flex flex-wrap gap-3 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <span className="size-2.5 rounded-sm bg-primary/40" /> TV
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="size-2.5 rounded-sm bg-violet-500/40" /> Anime
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="size-2.5 rounded-sm bg-sky-500/40" /> Movies
