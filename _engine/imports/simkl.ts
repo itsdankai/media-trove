@@ -1,6 +1,8 @@
 // Simkl: the free API's /sync/all-items, or a SimklBackup.json (same shape; file backups are a paid
-// Simkl feature). Sign-in uses Simkl's PIN flow, which needs only an app's client id (free to create
-// at simkl.com/settings/developer); the token is used for this one import and not kept.
+// Simkl feature). Sign-in is a device code entered at simkl.com/pin, which needs only an app's client
+// id (free to create at simkl.com/settings/developer); the token is used for this one import and not
+// kept. Apps made since Simkl's AUTH V2 (2026-09-18) use the standard OAuth 2.0 device flow; older apps
+// still use the V1 PIN endpoints until Simkl retires them (around April 2027), so both are supported.
 import type { MediaRef } from "../../plugins/_sdk/index.ts";
 import { getJson } from "../../plugins/_sdk/index.ts";
 import { baseName } from "./files.ts";
@@ -97,21 +99,60 @@ export function parseSimkl(data: Json): Parsed {
 
 // --- sign-in and download --------------------------------------------------------------------
 
+const UA = { "User-Agent": "MediaTrove/0.1 (self-hosted media tracker)" };
+
+/** What the importer remembers between showing the code and the user approving it. */
+export type SimklSignIn = { clientId: string; deviceCode: string | null };
+
+async function form(path: string, fields: Record<string, string>) {
+  const res = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { ...UA, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams(fields),
+    signal: AbortSignal.timeout(15_000),
+  });
+  return { status: res.status, body: (await res.json().catch(() => ({}))) as Json };
+}
+
+/** Starts sign-in: a code for the user to enter at simkl.com/pin. Read-only access is all we ask for. */
 export async function simklPin(clientId: string) {
-  const r = await getJson<Json>(`${API}/oauth/pin?client_id=${encodeURIComponent(clientId)}`);
-  if (!r?.user_code) throw new ImportUserError("Simkl didn't accept that client id.");
+  const v2 = await form("/oauth2/device", { client_id: clientId, scope: "media:read" }).catch(() => null);
+  let r = v2?.body?.device_code ? v2.body : null;
+  if (!r) {
+    // An app from before AUTH V2: the old PIN endpoint.
+    r = await getJson<Json>(`${API}/oauth/pin?client_id=${encodeURIComponent(clientId)}`, { headers: UA }).catch(
+      () => null,
+    );
+  }
+  if (!r?.user_code)
+    throw new ImportUserError("Simkl didn't accept that client ID. Copy it again from your Simkl app.");
   return {
+    signIn: { clientId, deviceCode: r.device_code ? String(r.device_code) : null } as SimklSignIn,
     userCode: String(r.user_code),
-    url: String(r.verification_url ?? "https://simkl.com/pin"),
+    url: String(r.verification_uri ?? r.verification_url ?? "https://simkl.com/pin"),
     expiresIn: Number(r.expires_in ?? 900),
     interval: Number(r.interval ?? 5),
   };
 }
 
-/** The access token once the user has entered the code at simkl.com/pin, or null while waiting. */
-export async function simklPinToken(clientId: string, userCode: string): Promise<string | null> {
+/** The access token once the user has approved the code, or null while waiting. */
+export async function simklPinToken(s: SimklSignIn, userCode: string): Promise<string | null> {
+  if (s.deviceCode) {
+    const r = await form("/oauth2/token", {
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      client_id: s.clientId,
+      device_code: s.deviceCode,
+    });
+    if (r.body?.access_token) return String(r.body.access_token);
+    const err = String(r.body?.error ?? "");
+    if (err === "authorization_pending" || err === "slow_down") return null;
+    if (err === "access_denied") throw new ImportUserError("Sign-in was declined on Simkl.");
+    if (err === "expired_token") throw new ImportUserError("That code has expired. Start again.");
+    throw new Error(`Simkl sign-in returned ${r.status}${err ? `: ${err}` : ""}`);
+  }
   const r = await getJson<Json>(
-    `${API}/oauth/pin/${encodeURIComponent(userCode)}?client_id=${encodeURIComponent(clientId)}`,
+    `${API}/oauth/pin/${encodeURIComponent(userCode)}?client_id=${encodeURIComponent(s.clientId)}`,
+    { headers: UA },
   );
   return r?.access_token ? String(r.access_token) : null;
 }
@@ -119,7 +160,7 @@ export async function simklPinToken(clientId: string, userCode: string): Promise
 export async function simklDownload(clientId: string, token: string): Promise<Json> {
   return getJson(
     `${API}/sync/all-items/?extended=full&episode_watched_at=yes`,
-    { headers: { "simkl-api-key": clientId, Authorization: `Bearer ${token}` } },
+    { headers: { ...UA, "simkl-api-key": clientId, Authorization: `Bearer ${token}` } },
     120_000,
   );
 }

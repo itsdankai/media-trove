@@ -10,7 +10,14 @@ import { fetchAniList, fetchMal, parseAniList, parseMal } from "./imports/anime-
 import { parseImdb, parseLetterboxd } from "./imports/csv-exports.ts";
 import { readUpload } from "./imports/files.ts";
 import { createImports, IMPORT_SOURCES, type ImportSource, importSourceId } from "./imports/runner.ts";
-import { parseSimkl, parseSimklFiles, simklDownload, simklPin, simklPinToken } from "./imports/simkl.ts";
+import {
+  parseSimkl,
+  parseSimklFiles,
+  type SimklSignIn,
+  simklDownload,
+  simklPin,
+  simklPinToken,
+} from "./imports/simkl.ts";
 import { parseTrakt } from "./imports/trakt.ts";
 import { ImportUserError, type Parsed, type UploadFile } from "./imports/types.ts";
 import { createLibrary } from "./library.ts";
@@ -44,7 +51,7 @@ export function createApp(
     if (!imports) throw new ProviderUnavailable("Imports are not enabled in this instance.");
     return imports;
   };
-  const simklCodes = new Map<string, string>(); // PIN code -> the client id it was issued for
+  const simklCodes = new Map<string, SimklSignIn>(); // code shown to the user -> its sign-in
   const fileParsers: Partial<Record<ImportSource, (files: UploadFile[]) => Parsed>> = {
     trakt: parseTrakt,
     simkl: parseSimklFiles,
@@ -216,20 +223,20 @@ export function createApp(
       .post("/api/imports/simkl/pin", zValidator("json", z.object({ clientId: z.string().optional() })), async (c) => {
         const clientId = c.req.valid("json").clientId?.trim() || process.env.SIMKL_CLIENT_ID;
         if (!clientId) throw new ImportUserError("Enter your Simkl app's client id.");
-        const pin = await simklPin(clientId);
-        simklCodes.set(pin.userCode, clientId);
+        const { signIn, ...pin } = await simklPin(clientId);
+        simklCodes.set(pin.userCode, signIn); // the device code stays on the server
         return c.json(pin);
       })
 
       .post("/api/imports/simkl/pin/:code", async (c) => {
         const code = c.req.param("code");
-        const clientId = simklCodes.get(code);
-        if (!clientId) throw new ImportUserError("That code has expired. Start again.");
-        const token = await simklPinToken(clientId, code);
+        const signIn = simklCodes.get(code);
+        if (!signIn) throw new ImportUserError("That code has expired. Start again.");
+        const token = await simklPinToken(signIn, code);
         if (!token) return c.json({ ready: false });
         simklCodes.delete(code);
         const job = needImports().start("simkl", "Simkl account", async () =>
-          parseSimkl(await simklDownload(clientId, token)),
+          parseSimkl(await simklDownload(signIn.clientId, token)),
         );
         return c.json({ ready: true, job });
       })

@@ -9,17 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
+import { groupProgress, timeSpan } from "@/lib/activity";
 import {
   api,
   completion,
+  type EventRow,
   formatMinutes,
   kindPath,
   type Media,
+  type MediaKind,
   type NewEvent,
   statusLabel,
   type TrackState,
 } from "@/lib/api";
-import { describe } from "./History.tsx";
+import { describeGroup } from "./History.tsx";
 
 export function Detail() {
   // biome-ignore lint/style/noNonNullAssertion: route always has :key
@@ -78,20 +81,49 @@ export function Detail() {
 
       {m.kind === "show" && <Seasons m={m} state={state} track={track} />}
 
-      {events.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-medium">Activity</h2>
-          <ul className="divide-y rounded-xl border bg-card text-sm">
-            {events.map((e) => (
-              <li key={e.id} className="flex justify-between gap-4 px-4 py-2.5">
-                <span>{describe(e, m.kind)}</span>
-                <time className="text-muted-foreground">{new Date(e.occurredAt).toLocaleString()}</time>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {events.length > 0 && <Activity events={events} kind={m.kind} />}
     </div>
+  );
+}
+
+const ACTIVITY_SHOWN = 8;
+
+/** Newest first; position updates grouped per app and day, the latest few shown until asked for all. */
+function Activity({ events, kind }: { events: EventRow[]; kind: MediaKind }) {
+  const [all, setAll] = useState(false);
+  const [raw, setRaw] = useState(false);
+  const groups = raw ? events.map((e) => ({ rows: [e], first: e, last: e })) : groupProgress(events, (e) => e);
+  const shown = all ? groups : groups.slice(0, ACTIVITY_SHOWN);
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-medium">Activity</h2>
+        {events.length > groups.length || raw ? (
+          <button
+            type="button"
+            onClick={() => setRaw((r) => !r)}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            {raw ? "Group updates" : `Show every update (${events.length})`}
+          </button>
+        ) : null}
+      </div>
+      <ul className="divide-y rounded-xl border bg-card text-sm">
+        {shown.map((g) => (
+          <li key={g.last.id} className="flex justify-between gap-4 px-4 py-2.5">
+            <span>{describeGroup(g, kind)}</span>
+            <time className="shrink-0 text-right text-muted-foreground">
+              {new Date(g.last.occurredAt).toLocaleDateString()}, {timeSpan(g)}
+            </time>
+          </li>
+        ))}
+      </ul>
+      {groups.length > ACTIVITY_SHOWN && (
+        <Button variant="ghost" size="sm" onClick={() => setAll((a) => !a)}>
+          {all ? "Show less" : `Show all activity (${groups.length})`}
+        </Button>
+      )}
+    </section>
   );
 }
 
