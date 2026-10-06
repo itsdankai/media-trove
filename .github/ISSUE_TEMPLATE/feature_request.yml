@@ -1,0 +1,15 @@
+name: Feature idea
+description: Something you'd like MediaTrove to do, or an app you'd like to connect.
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe it the way you'd use it, e.g. "Mark a whole season watched in one click."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
