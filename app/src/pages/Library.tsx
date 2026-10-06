@@ -7,19 +7,19 @@ import { api, completion, kindLabel, type MediaKind, type Section, statusLabel, 
 
 const statuses: Record<Section, TrackState["status"][]> = {
   movie: ["watching", "completed"],
-  show: ["watching", "completed"],
-  anime: ["watching", "completed"],
+  show: ["watching", "caught_up", "completed"],
+  anime: ["watching", "caught_up", "completed"],
   audiobook: ["listening", "finished"],
 };
 
 const title: Record<Section, string> = { ...kindLabel, anime: "Anime" };
 
-/** Minimum ratings that can be offered: out of 10 (TMDB; AniList for anime), Audible out of 5. */
+/** Minimum ratings that can be offered: out of 10 (TMDB; for anime, the community score), Audible out of 5. */
 const ratingSteps = (section: Section) => (section === "audiobook" ? [3.5, 4, 4.5] : [6, 7, 8, 9]);
 const ratingSource: Record<Section, string> = {
   movie: "on TMDB",
   show: "on TMDB",
-  anime: "on AniList",
+  anime: "community score",
   audiobook: "stars",
 };
 
@@ -53,10 +53,10 @@ export function Library({ section }: { section: Section }) {
         .map((y) => Math.floor((y as number) / 10) * 10),
     ),
   ].sort((a, b) => b - a);
-  // Tags by how many titles have them, most common first: the useful ones (Isekai, Shounen) lead.
+  // Tags A to Z, each with how many titles here have it.
   const tagCounts = new Map<string, number>();
   for (const i of all) for (const t of i.media.extra.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
-  const tags = [...tagCounts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+  const tags = [...tagCounts.keys()].sort((a, b) => a.localeCompare(b));
   // Only minimums that at least one title here reaches.
   const ratings = ratingSteps(section).filter((r) => all.some((i) => (i.media.extra.rating ?? 0) >= r));
 

@@ -2,7 +2,9 @@
 # Open http://localhost:8787. Your library lives in ./data (back that folder up).
 services:
   mediatrove:
-    build: .
+    image: ghcr.io/itsdankai/media-trove:latest
+    # To build from this folder instead of pulling the published image, replace the line above with:
+    # build: .
     container_name: mediatrove
     restart: unless-stopped
     env_file:

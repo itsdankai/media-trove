@@ -41,15 +41,15 @@ export type Media = Omit<SearchResult, "subtitle"> & {
     narrators?: string[];
     runtimeMin?: number | null;
     series?: { name: string; position: string | null } | null;
-    rating?: number | null; // out of 10 (TMDB, or AniList for anime); Audible out of 5
-    ratingSource?: "TMDB" | "AniList";
+    rating?: number | null; // out of 10 (TMDB; for anime the averaged score from anime-offline-database); Audible out of 5
+    ratingSource?: "TMDB" | "anime community";
     anime?: boolean;
-    tags?: string[]; // anime: AniList tags (Isekai, Shounen…); audiobooks: Audible's narrowest categories
+    tags?: string[]; // anime: Shounen, Isekai… (anime-offline-database); audiobooks: Audible's narrowest categories
   };
 };
 
 export type TrackState = {
-  status: "planned" | "watching" | "completed" | "listening" | "finished";
+  status: "planned" | "watching" | "caught_up" | "completed" | "listening" | "finished";
   lastActivityAt: string | null;
   watchCount?: number;
   watchedEpisodes?: string[];
@@ -209,6 +209,12 @@ export const api = {
     }),
   simklPinCheck: (code: string) =>
     send<{ ready: boolean; job?: ImportJob }>("POST", `/api/imports/simkl/pin/${encodeURIComponent(code)}`),
+  backupStatus: () => call<{ latest: { file: string; at: number } | null }>("/api/backup/status"),
+  restoreBackup: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return call<{ titles: number; events: number; added: number }>("/api/backup/restore", { method: "POST", body });
+  },
   removeImport: (source: string) => send<{ removed: number }>("DELETE", `/api/imports/${source}`),
 };
 
@@ -251,6 +257,7 @@ export const kindPath: Record<MediaKind, string> = { movie: "/movies", show: "/s
 export const statusLabel: Record<TrackState["status"], string> = {
   planned: "Planned",
   watching: "Watching",
+  caught_up: "Caught up",
   completed: "Completed",
   listening: "Listening",
   finished: "Finished",
@@ -261,7 +268,8 @@ export function completion(m: Media, s: TrackState) {
   // Finished counts as 100% even when the app stopped at 99.6% (books finish at 99%).
   if (m.kind === "audiobook") return s.status === "finished" ? 1 : (s.progress ?? 0);
   if (m.kind === "show") {
-    const total = m.extra.airedEpisodes || m.extra.totalEpisodes || 0;
+    // Against every episode announced so far, not just the aired ones: caught up on 5 of 6 is 83%, not 100%.
+    const total = Math.max(m.extra.airedEpisodes ?? 0, m.extra.totalEpisodes ?? 0);
     return total ? Math.min(1, (s.watchedEpisodes?.length ?? 0) / total) : 0;
   }
   if (s.progress) return s.progress;

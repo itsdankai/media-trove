@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, RotateCcw, Store, Unplug } from "lucide-react";
+import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { SyncModePicker } from "@/components/SyncModePicker";
@@ -7,6 +7,7 @@ import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { api, type Connection, type PluginStatus, type SyncMode, timeAgo } from "@/lib/api";
 
@@ -46,7 +47,69 @@ export function Settings() {
       </section>
 
       <Connections />
+
+      <Backups />
     </div>
+  );
+}
+
+/** Download the whole library as one file, see the latest weekly backup, restore from a file. */
+function Backups() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["backup-status"], queryFn: api.backupStatus });
+  const [file, setFile] = useState<File | null>(null);
+  const restore = useMutation({
+    mutationFn: () => api.restoreBackup(file as File),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+  return (
+    <section className="space-y-4">
+      <h2 className="text-lg font-medium">Backups</h2>
+      <Card className="gap-4 p-5 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-muted-foreground">
+            Everything you've tracked, as one file. Connections aren't included: reconnect your apps after a restore.
+          </p>
+          <Button asChild variant="secondary" size="sm">
+            <a href="/api/backup" download>
+              <Download /> Download backup
+            </a>
+          </Button>
+        </div>
+        <p className="text-muted-foreground">
+          {data?.latest
+            ? `A backup is also saved automatically every week, in the data folder's "backups" folder (the last 8 are kept). Latest: ${data.latest.file}, ${timeAgo(data.latest.at)}.`
+            : `A backup is also saved automatically every week, in the data folder's "backups" folder (the last 8 are kept).`}
+        </p>
+        <form
+          className="flex flex-wrap items-center gap-2 border-t pt-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (confirm("Add everything in this backup to your library? Nothing you have now is removed."))
+              restore.mutate();
+          }}
+        >
+          <span className="font-medium">Restore</span>
+          <Input
+            type="file"
+            accept=".json"
+            className="max-w-xs"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <Button type="submit" size="sm" variant="outline" disabled={!file || restore.isPending}>
+            <Upload /> Restore
+          </Button>
+          {restore.error && <p className="w-full text-destructive">{restore.error.message}</p>}
+          {restore.data && (
+            <p className="w-full text-muted-foreground">
+              {restore.data.added
+                ? `Restored ${restore.data.added} entries across ${restore.data.titles} titles.`
+                : "Nothing new: everything in that backup is already here."}
+            </p>
+          )}
+        </form>
+      </Card>
+    </section>
   );
 }
 

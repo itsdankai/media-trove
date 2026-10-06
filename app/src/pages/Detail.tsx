@@ -216,13 +216,16 @@ function AudiobookActions({ m, state, track }: { m: Media; state: TrackState; tr
 
 function ShowSummary({ m, state }: { m: Media; state: TrackState }) {
   const aired = m.extra.airedEpisodes ?? m.extra.totalEpisodes ?? 0;
+  const total = Math.max(aired, m.extra.totalEpisodes ?? 0);
   const watched = state.watchedEpisodes?.length ?? 0;
   const next = m.extra.nextEpisode;
+  const notOut = total - aired;
   return (
     <div className="max-w-md space-y-2 pt-2">
       <div className="flex justify-between text-sm">
         <span className="font-medium">
-          {watched} of {aired} episodes watched
+          {watched} of {total} episodes watched
+          {notOut > 0 && <span className="font-normal text-muted-foreground"> · {notOut} not out yet</span>}
         </span>
         <span className="text-muted-foreground">{Math.round(completion(m, state) * 100)}%</span>
       </div>
