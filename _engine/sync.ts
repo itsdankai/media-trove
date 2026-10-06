@@ -2,10 +2,10 @@
 // appended to the event log with the plugin id as its source; the sync rules in events.ts decide
 // what it means. Connections sync on the plugin's interval, or on demand.
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import type { ConnectResult, PluginEvent, SyncResult } from "../plugins/_sdk/index.ts";
 import { decrypt, encrypt } from "./crypto.ts";
-import { type ConnectionRow, connections, type Db } from "./db.ts";
+import { type ConnectionRow, connections, type Db, events, idMap } from "./db.ts";
 import { appendEvents, type NewEvent } from "./events.ts";
 import type { Library } from "./library.ts";
 import type { PluginHost } from "./plugins/host.ts";
@@ -40,27 +40,39 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
     return run;
   }
 
+  const MAX_ROUNDS = 30;
+
   async function doSync(id: string): Promise<SyncSummary> {
-    const conn = get(id);
-    if (!conn) throw new Error("connection not found");
+    const summary: SyncSummary = { received: 0, added: 0, unmatched: 0, refused: 0, at: Date.now() };
     try {
-      const res = await host.call<SyncResult>(conn.pluginId, "/sync", {
-        credentials: decrypt(key, conn.credentials),
-        cursor: conn.cursor,
-      });
-      const { list, unmatched } = await toEvents(conn, res.events);
-      const { inserted, refused } = appendEvents(db, list);
-      const summary: SyncSummary = { received: res.events.length, added: inserted, unmatched, refused, at: Date.now() };
-      db.update(connections)
-        .set({
-          cursor: res.cursor ?? null,
-          ...(res.credentials ? { credentials: encrypt(key, res.credentials) } : {}),
-          lastSyncAt: summary.at,
-          lastError: null,
-          lastSummary: JSON.stringify(summary),
-        })
-        .where(eq(connections.id, id))
-        .run();
+      // A plugin with a big backlog answers `more: true`; keep going, saving after every round so
+      // a crash or restart resumes where it stopped.
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        const conn = get(id);
+        if (!conn) throw new Error("connection not found");
+        const res = await host.call<SyncResult>(conn.pluginId, "/sync", {
+          credentials: decrypt(key, conn.credentials),
+          cursor: conn.cursor,
+        });
+        const { list, unmatched } = await toEvents(conn, res.events);
+        const { inserted, refused } = appendEvents(db, list);
+        summary.received += res.events.length;
+        summary.added += inserted;
+        summary.unmatched += unmatched;
+        summary.refused += refused;
+        summary.at = Date.now();
+        db.update(connections)
+          .set({
+            cursor: res.cursor ?? null,
+            ...(res.credentials ? { credentials: encrypt(key, res.credentials) } : {}),
+            lastSyncAt: summary.at,
+            lastError: null,
+            lastSummary: JSON.stringify(summary),
+          })
+          .where(eq(connections.id, id))
+          .run();
+        if (!res.more) break;
+      }
       return summary;
     } catch (e) {
       db.update(connections)
@@ -79,6 +91,13 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
       if (!mediaKey) {
         unmatched++;
         continue;
+      }
+      if (e.media.artwork) {
+        try {
+          lib.saveArtwork(mediaKey, conn.pluginId, e.media.artwork);
+        } catch (err) {
+          console.error("artwork:", (err as Error).message); // a bad cover never fails a sync
+        }
       }
       out.push({
         mediaKey,
@@ -114,7 +133,23 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
     db.delete(connections).where(eq(connections.id, id)).run();
   }
 
-  return { connect, syncNow, schedule, remove, isRunning: (id: string) => running.has(id) };
+  /**
+   * Starts a connection over: forgets its cursor and re-imports everything, so better matching
+   * applies to old items too. Its plugin's earlier events are dropped first (they come straight
+   * back), unless another account of the same plugin shares them. The user's own entries are kept.
+   */
+  async function resync(id: string) {
+    const conn = get(id);
+    if (!conn) throw new Error("connection not found");
+    const siblings = db.select().from(connections).where(eq(connections.pluginId, conn.pluginId)).all();
+    if (siblings.length === 1) db.delete(events).where(eq(events.source, conn.pluginId)).run();
+    // Title matches are guesses; look them up again. Id-based matches (imdb, asin) stay cached.
+    db.delete(idMap).where(like(idMap.ref, "%:title%")).run();
+    db.update(connections).set({ cursor: null }).where(eq(connections.id, id)).run();
+    return syncNow(id);
+  }
+
+  return { connect, syncNow, resync, schedule, remove, isRunning: (id: string) => running.has(id) };
 }
 
 export type Sync = ReturnType<typeof createSync>;

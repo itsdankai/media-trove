@@ -1,7 +1,10 @@
 // Media lookups shared by the API and the sync engine: which provider handles a kind, caching
 // metadata rows, and matching a plugin's MediaRef to a media key (cached in id_map).
-import { eq } from "drizzle-orm";
-import { type Db, idMap, media } from "./db.ts";
+import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { and, eq } from "drizzle-orm";
+import { artwork, type Db, idMap, media } from "./db.ts";
 import {
   type MediaInfo,
   type MediaKind,
@@ -13,12 +16,41 @@ import {
 
 const RETRY_MISS_MS = 24 * 60 * 60 * 1000;
 
-export function createLibrary(db: Db, providers: MetadataProvider[]) {
+/**
+ * Where a connected app's own cover wins over the catalog's: merged editions (combined keys like
+ * ASIN1+ASIN2), which the catalog only has as separate parts with "Part 1 of 2" covers.
+ */
+const preferSourceArt = (key: string) => key.includes("+");
+
+export function createLibrary(db: Db, providers: MetadataProvider[], opts: { artworkDir?: string } = {}) {
   const providerFor = (kind: MediaKind) => {
     const p = providers.find((x) => x.kinds.includes(kind));
     if (!p) throw new ProviderUnavailable(`No metadata source for ${kind}`);
     return p;
   };
+
+  function sourcePoster(key: string) {
+    if (!preferSourceArt(key)) return null;
+    const art = db.select().from(artwork).where(eq(artwork.mediaKey, key)).get();
+    return art ? `/api/artwork/${art.file}` : null;
+  }
+
+  /** Saves a plugin's cover (a data: URL) and, where it should win, shows it right away. */
+  function saveArtwork(key: string, source: string, dataUrl: string) {
+    if (!opts.artworkDir) return;
+    const m = dataUrl.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+    if (!m) return;
+    const file = `${createHash("sha1").update(`${key}|${source}`).digest("hex").slice(0, 20)}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
+    mkdirSync(opts.artworkDir, { recursive: true });
+    writeFileSync(join(opts.artworkDir, file), Buffer.from(m[2], "base64"));
+    const row = { mediaKey: key, source, file, updatedAt: Date.now() };
+    db.delete(artwork)
+      .where(and(eq(artwork.mediaKey, key), eq(artwork.source, source)))
+      .run();
+    db.insert(artwork).values(row).run();
+    const poster = sourcePoster(key);
+    if (poster) db.update(media).set({ poster }).where(eq(media.key, key)).run();
+  }
 
   function upsertMedia(info: MediaInfo) {
     const row = {
@@ -26,7 +58,7 @@ export function createLibrary(db: Db, providers: MetadataProvider[]) {
       kind: info.kind,
       title: info.title,
       year: info.year,
-      poster: info.poster,
+      poster: sourcePoster(info.key) ?? info.poster,
       overview: info.overview,
       genres: info.genres,
       extra: { ...info.extra, subtitle: info.subtitle ?? null },
@@ -53,7 +85,10 @@ export function createLibrary(db: Db, providers: MetadataProvider[]) {
           : r.asin
             ? `asin:${r.asin}`
             : null;
-    return `${r.kind}:${id ?? `title:${(r.title ?? "").toLowerCase()}|${(r.author ?? "").toLowerCase()}|${r.year ?? ""}`}`;
+    // "title2": title refs from before edition matching (2026-10-05) are ignored and looked up again.
+    const lc = (s?: string) => (s ?? "").toLowerCase();
+    const byTitle = `title2:${lc(r.title)}|${lc(r.author)}|${r.year ?? ""}|${lc(r.publisher)}|${lc(r.narrator)}`;
+    return `${r.kind}:${id ?? byTitle}`;
   }
 
   async function resolve(r: MediaRef): Promise<string | null> {
@@ -70,7 +105,7 @@ export function createLibrary(db: Db, providers: MetadataProvider[]) {
     return key;
   }
 
-  return { providerFor, upsertMedia, ensureMedia, resolve };
+  return { providerFor, upsertMedia, ensureMedia, resolve, saveArtwork, artworkDir: opts.artworkDir };
 }
 
 export type Library = ReturnType<typeof createLibrary>;

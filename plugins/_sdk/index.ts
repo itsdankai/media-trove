@@ -47,6 +47,10 @@ export type MediaRef = {
   title?: string;
   year?: number;
   author?: string;
+  narrator?: string; // helps tell editions apart (e.g. a full-cast dramatization)
+  publisher?: string;
+  /** The source's own cover as a data: URL (send once per title). Used where it beats the catalog's, e.g. merged editions. */
+  artwork?: string;
 };
 
 export type PluginEvent = {
@@ -59,7 +63,8 @@ export type PluginEvent = {
 };
 
 export type ConnectResult = { account: { name: string }; credentials: unknown };
-export type SyncResult = { events: PluginEvent[]; cursor: unknown; credentials?: unknown };
+/** `more: true` asks MediaTrove to call /sync again right away (big first syncs run in rounds). */
+export type SyncResult = { events: PluginEvent[]; cursor: unknown; credentials?: unknown; more?: boolean };
 
 /** Thrown for problems the user can fix (wrong password, bad URL). Shown to them as-is. */
 export class UserError extends Error {}
@@ -67,7 +72,10 @@ export class UserError extends Error {}
 export function definePlugin<C>(p: {
   manifest: Manifest;
   connect(fields: Record<string, string>): Promise<{ account: { name: string }; credentials: C }>;
-  sync(credentials: C, cursor: unknown): Promise<{ events: PluginEvent[]; cursor: unknown; credentials?: C }>;
+  sync(
+    credentials: C,
+    cursor: unknown,
+  ): Promise<{ events: PluginEvent[]; cursor: unknown; credentials?: C; more?: boolean }>;
 }) {
   return new Hono()
     .onError((err, c) => {

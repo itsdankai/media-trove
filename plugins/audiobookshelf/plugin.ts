@@ -35,6 +35,7 @@ const READ_ONLY: [string, RegExp][] = [
   ["POST", /^\/auth\/refresh$/],
   ["GET", /^\/api\/me$/],
   ["GET", /^\/api\/items\/[\w-]+$/],
+  ["GET", /^\/api\/items\/[\w-]+\/cover$/],
 ];
 
 export function assertReadOnly(method: string, path: string) {
@@ -46,6 +47,25 @@ export function assertReadOnly(method: string, path: string) {
 export async function absRequest<T>(server: string, method: string, path: string, init: RequestInit = {}): Promise<T> {
   assertReadOnly(method, path);
   return getJson<T>(`${server}${path}`, { ...init, method });
+}
+
+/**
+ * A book's cover from the library itself, as a data: URL (covers need the login, so the browser
+ * can't load them directly). Resized by ABS to 500px wide. Null if the book has no cover.
+ */
+async function absCover(creds: AbsCredentials, id: string): Promise<string | null> {
+  const path = `/api/items/${id}/cover`;
+  assertReadOnly("GET", path);
+  const r = await fetch(`${creds.server}${path}?width=500&format=jpeg`, {
+    headers: { Authorization: `Bearer ${creds.accessToken}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!r.ok) return null;
+  const type = r.headers.get("content-type") ?? "image/jpeg";
+  if (!type.startsWith("image/")) return null;
+  const bytes = Buffer.from(await r.arrayBuffer());
+  if (bytes.length > 1_500_000) return null;
+  return `data:${type};base64,${bytes.toString("base64")}`;
 }
 
 const normalize = (server: string) => {
@@ -84,6 +104,9 @@ type Item = {
       title?: string;
       authorName?: string;
       authors?: { name: string }[];
+      narratorName?: string;
+      narrators?: string[];
+      publisher?: string;
       asin?: string;
       isbn?: string;
       publishedYear?: string;
@@ -91,10 +114,21 @@ type Item = {
   };
 };
 
+type BookRef = {
+  title?: string;
+  author?: string;
+  narrator?: string;
+  publisher?: string;
+  asin?: string;
+  isbn?: string;
+  year?: number;
+};
+
 export type Cursor = {
   since: number;
-  items: Record<string, { title?: string; author?: string; asin?: string; isbn?: string; year?: number } | null>;
+  items: Record<string, BookRef | null>;
   last: Record<string, number>; // progress last reported per item
+  art: Record<string, boolean>; // covers already sent
 };
 
 export default definePlugin<AbsCredentials>({
@@ -137,7 +171,12 @@ export default definePlugin<AbsCredentials>({
 
   async sync(creds, rawCursor) {
     const saved = (rawCursor ?? {}) as Partial<Cursor>;
-    const cursor: Cursor = { since: saved.since ?? 0, items: saved.items ?? {}, last: saved.last ?? {} };
+    const cursor: Cursor = {
+      since: saved.since ?? 0,
+      items: saved.items ?? {},
+      last: saved.last ?? {},
+      art: saved.art ?? {},
+    };
     const now = Date.now();
     let current = creds;
     let refreshed = false;
@@ -173,7 +212,12 @@ export default definePlugin<AbsCredentials>({
       if (!(p.libraryItemId in cursor.items)) cursor.items[p.libraryItemId] = await bookInfo(current, p.libraryItemId);
       const book = cursor.items[p.libraryItemId];
       if (!book) continue; // podcast or deleted item
-      const media = { kind: "audiobook" as const, ...book };
+      // Send the library's own cover once per book; MediaTrove decides where to use it.
+      const artwork = cursor.art[p.libraryItemId]
+        ? undefined
+        : await absCover(current, p.libraryItemId).catch(() => null);
+      cursor.art[p.libraryItemId] = true;
+      const media = { kind: "audiobook" as const, ...book, ...(artwork ? { artwork } : {}) };
       const progress = bookProgress(p);
       // If ABS didn't move the timestamp, the change happened between our last sync and now.
       const at = p.lastUpdate > cursor.since ? p.lastUpdate : now;
@@ -186,7 +230,7 @@ export default definePlugin<AbsCredentials>({
   },
 });
 
-async function bookInfo(creds: AbsCredentials, id: string) {
+async function bookInfo(creds: AbsCredentials, id: string): Promise<BookRef | null> {
   try {
     const item = await absRequest<Item>(creds.server, "GET", `/api/items/${id}`, {
       headers: { Authorization: `Bearer ${creds.accessToken}` },
@@ -196,6 +240,8 @@ async function bookInfo(creds: AbsCredentials, id: string) {
     return {
       title: m.title,
       author: m.authorName ?? m.authors?.map((a) => a.name).join(", "),
+      narrator: m.narratorName || m.narrators?.join(", ") || undefined,
+      publisher: m.publisher || undefined,
       asin: m.asin || undefined,
       isbn: m.isbn || undefined,
       year: Number(m.publishedYear) || undefined,

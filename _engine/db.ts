@@ -58,7 +58,18 @@ export const idMap = sqliteTable("id_map", {
   checkedAt: integer("checked_at").notNull(),
 });
 
+// Covers that came from a connected app (e.g. Audiobookshelf), saved under <data dir>/artwork.
+export const artwork = sqliteTable("artwork", {
+  mediaKey: text("media_key").notNull(),
+  source: text("source").notNull(),
+  file: text("file").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 const ddl = `
+CREATE TABLE IF NOT EXISTS artwork (
+  media_key TEXT NOT NULL, source TEXT NOT NULL, file TEXT NOT NULL, updated_at INTEGER NOT NULL,
+  PRIMARY KEY (media_key, source));
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS connections (
   id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL, account_name TEXT NOT NULL, credentials TEXT NOT NULL,

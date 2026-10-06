@@ -157,6 +157,7 @@ export const api = {
   connect: (pluginId: string, fields: Record<string, string>) =>
     send<{ id: string; accountName: string }>("POST", "/api/connections", { pluginId, fields }),
   syncNow: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/sync`),
+  resync: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/resync`),
   disconnect: (id: string) => fetch(`/api/connections/${id}`, { method: "DELETE" }),
 };
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Store, Unplug } from "lucide-react";
+import { RefreshCw, RotateCcw, Store, Unplug } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ThresholdPicker } from "@/components/ThresholdPicker";
@@ -65,6 +65,7 @@ function Connections() {
     qc.invalidateQueries({ queryKey: ["library"] });
   };
   const sync = useMutation({ mutationFn: api.syncNow, onSettled: refresh });
+  const resync = useMutation({ mutationFn: api.resync, onSettled: refresh });
   const remove = useMutation({ mutationFn: api.disconnect, onSettled: refresh });
 
   return (
@@ -103,6 +104,15 @@ function Connections() {
                   disabled={c.syncing || sync.isPending}
                 >
                   <RefreshCw className={c.syncing ? "animate-spin" : ""} /> Sync now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => resync.mutate(c.id)}
+                  disabled={c.syncing || resync.isPending}
+                  title="Re-import everything from this app, using the latest matching. Your own entries are kept."
+                >
+                  <RotateCcw /> Start over
                 </Button>
                 <Button
                   size="sm"
