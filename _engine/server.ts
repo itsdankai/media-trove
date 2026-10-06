@@ -4,6 +4,9 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { createApp } from "./app.ts";
+import { passwordGate } from "./auth.ts";
+import { weeklyBackup } from "./backup.ts";
+import { emailBackup, emailConfigured } from "./backup-email.ts";
 import { loadKey } from "./crypto.ts";
 import { openDb } from "./db.ts";
 import { createLibrary } from "./library.ts";
@@ -38,8 +41,27 @@ const stopSchedule = sync.schedule();
 // Keep cached metadata current: older rows gain new fields, airing shows get their next episode.
 void lib.refreshStale().then((n) => n && console.log(`refreshed ${n} titles`));
 const refreshTimer = setInterval(() => void lib.refreshStale(), 6 * 60 * 60 * 1000);
+// A backup file of the whole library once a week, in <data>/backups (the last 8 are kept).
+// Also emailed when Resend is set up (backup-email.ts).
+const backupNow = async () => {
+  try {
+    const file = weeklyBackup(db, dataDir);
+    if (!file) return;
+    console.log(`backup written: ${file}`);
+    if (!emailConfigured()) return;
+    const json = readFileSync(join(dataDir, "backups", file), "utf8");
+    const b = JSON.parse(json) as { media: unknown[]; events: unknown[] };
+    await emailBackup(file, json, { titles: b.media.length, events: b.events.length });
+    console.log(`backup emailed: ${file}`);
+  } catch (e) {
+    console.error("backup:", (e as Error).message);
+  }
+};
+void backupNow();
+const backupTimer = setInterval(() => void backupNow(), 6 * 60 * 60 * 1000);
 
 const app = new Hono()
+  .use("*", passwordGate())
   .route("/", createApp(db, providers, { host, sync, writeback }, { artworkDir, dataDir }))
   .use("/*", serveStatic({ root }))
   // Client-side routes (/shows, /media/…) all load the same page.
@@ -59,6 +81,7 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
     stopSchedule();
     clearInterval(refreshTimer);
+    clearInterval(backupTimer);
     host.stopAll();
     server.close(() => process.exit(0));
   });

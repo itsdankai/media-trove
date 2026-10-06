@@ -69,7 +69,7 @@ export function eventsFor(db: Db, mediaKey: string) {
 }
 
 export type TrackState = {
-  status: "planned" | "watching" | "completed" | "listening" | "finished";
+  status: "planned" | "watching" | "caught_up" | "completed" | "listening" | "finished"; // caught_up: every aired episode seen, more coming
   lastActivityAt: string | null;
   watchCount?: number; // movies
   watchedEpisodes?: string[]; // shows, as "s1e3"
@@ -131,6 +131,7 @@ export function project(
   list: EventRow[],
   airedEpisodes?: number,
   threshold = DEFAULT_THRESHOLD,
+  airing = false, // shows: still making episodes (TMDB status isn't Ended/Canceled)
 ): TrackState {
   // Same instant, different kinds: a position report goes before "watched"/"finished", so marking
   // something done wins over the stale position some apps keep (Stremio keeps 29% after "mark watched").
@@ -161,7 +162,9 @@ export function project(
     const seen = [...eps].filter(([, v]) => v.watches > 0).map(([tag]) => tag);
     const done = airedEpisodes != null && airedEpisodes > 0 && seen.length >= airedEpisodes;
     return {
-      status: done ? "completed" : seen.length > 0 || current ? "watching" : "planned",
+      // All aired episodes seen: "caught up" while the show is still airing, "completed" once it has ended.
+      // A new episode raises airedEpisodes (daily refresh), and it goes back to "watching".
+      status: done ? (airing ? "caught_up" : "completed") : seen.length > 0 || current ? "watching" : "planned",
       lastActivityAt: last,
       watchedEpisodes: seen,
       current,

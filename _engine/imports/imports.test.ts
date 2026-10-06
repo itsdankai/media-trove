@@ -8,7 +8,7 @@ import { appendEvents, eventsFor, project } from "../events.ts";
 import { createLibrary } from "../library.ts";
 import { type MediaInfo, type MetadataProvider, makeKey } from "../metadata/types.ts";
 import { animeEvents, buildIndex } from "./anime.ts";
-import { parseAniList, parseMal } from "./anime-lists.ts";
+import { parseMal } from "./anime-lists.ts";
 import { parseImdb, parseLetterboxd } from "./csv-exports.ts";
 import { parseCsv, readUpload } from "./files.ts";
 import { createImports, type ImportJob } from "./runner.ts";
@@ -140,38 +140,6 @@ describe("import parsers", () => {
     expect(p.events).toHaveLength(3);
     expect(p.skipped).toBe(1);
     expect(p.anime[0]).toMatchObject({ ids: { simkl: 2000, mal: 52991 }, episodes: [{ number: 1 }] });
-  });
-
-  it("AniList: episodes 1..progress dated by completion; planned entries skipped", () => {
-    const p = parseAniList({
-      MediaListCollection: {
-        lists: [
-          {
-            entries: [
-              {
-                status: "COMPLETED",
-                progress: 28,
-                updatedAt: 1700000000,
-                completedAt: { year: 2024, month: 3, day: 22 },
-                startedAt: {},
-                media: {
-                  id: 154587,
-                  idMal: 52991,
-                  format: "TV",
-                  episodes: 28,
-                  title: { english: "Frieren" },
-                  startDate: { year: 2023 },
-                },
-              },
-              { status: "PLANNING", progress: 0, media: { id: 1, format: "TV", title: {} } },
-            ],
-          },
-        ],
-      },
-    });
-    expect(p.anime[0].episodes).toHaveLength(28);
-    expect(p.anime[0].episodes[0].at).toBe("2024-03-22T12:00:00.000Z");
-    expect(p.skipped).toBe(1);
   });
 
   it("MyAnimeList: completed counts the whole show; plan-to-watch skipped", () => {

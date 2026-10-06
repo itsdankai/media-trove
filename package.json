@@ -1,6 +1,7 @@
 {
   "name": "media-trove",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"tsx watch _engine/server.ts\" \"vite\"",

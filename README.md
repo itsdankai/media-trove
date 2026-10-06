@@ -1,31 +1,88 @@
 # MediaTrove
 
-A self-hosted tracker for everything you watch and listen to: movies, TV shows, and
-audiobooks first, with more media types to come.
+A self-hosted tracker for everything you watch and listen to: movies, TV shows, anime and
+audiobooks, with more media types to come.
 
-- A clean library for each category, plus a calendar of upcoming releases.
-- A **plugin marketplace**: search for your service (Stremio, Nuvio, Audiobookshelf, Plex,
-  Jellyfin, Emby, Kodi…), enter your server and login or API key, and it tracks automatically.
-- One-time imports from Trakt, Simkl, AniList, MyAnimeList, Letterboxd, and IMDb.
+- **Your library**, one page per kind, with filters (status, genre, year, rating, tags).
+- **A plugin marketplace.** Connect Stremio, Nuvio, Plex, Jellyfin, Emby, Kodi or Audiobookshelf
+  with your server and login, and what you watch is tracked automatically. Stremio, Nuvio and Jellyfin
+  can also be kept in sync: mark something in MediaTrove and it's marked there too.
+- **A release calendar** of new episodes, sequels and audiobooks from authors you follow.
+- **One-time imports** from Trakt, Simkl, MyAnimeList, Letterboxd and IMDb.
+- **Backups**: download everything as one file, and a copy is saved every week.
 
-**Status:** early development. Manual tracking, the plugins listed above, and one-time imports
-work. Filters, the calendar and an Anime section are next.
+**Status:** v0.1, early but complete for movies, shows, anime and audiobooks.
 
 ## Run it
 
+You need Docker. In an empty folder:
+
 ```sh
-cp .env.example .env   # add a free TMDB key for movies and shows
-docker compose up -d   # then open http://localhost:8787
+curl -O https://raw.githubusercontent.com/itsdankai/media-trove/main/compose.yaml
+curl -o .env https://raw.githubusercontent.com/itsdankai/media-trove/main/.env.example
 ```
 
-Your library is stored in `./data`. Back up that folder.
+Open `.env` and set `TMDB_API_KEY` (free: themoviedb.org, then Settings, then API). If anyone but you
+can reach this machine, also set `MEDIATROVE_PASSWORD`. Then:
 
-Audiobook search uses Audible's public catalog and needs no key. Set `AUDIBLE_REGION` to search another store.
+```sh
+docker compose up -d
+```
 
-Imports live on the Import page. Trakt, Letterboxd and IMDb read the export file each service
-lets you download. AniList and MyAnimeList read a public profile by username. Simkl signs in
-with a code; it needs the client ID of a free app from simkl.com/settings/developer, either
-typed into the form or set once as `SIMKL_CLIENT_ID`.
+Open http://localhost:8787 (or this machine's address, port 8787). The first screen asks one
+question, then you're in. Your library lives in `./data` next to `compose.yaml`.
+
+To update later: `docker compose pull && docker compose up -d`.
+
+## Settings
+
+All optional except the TMDB key. Put them in `.env` and run `docker compose up -d` again.
+
+| Setting | What it does |
+|---|---|
+| `TMDB_API_KEY` | Movie and show data. Required. The v3 "API Key" or the v4 "Read Access Token" both work. |
+| `MEDIATROVE_PASSWORD` | Asks for this password before showing anything (any username works). **Set it whenever MediaTrove is reachable by anyone but you**, and put HTTPS in front of it (a reverse proxy) if it's reachable from the internet. |
+| `AUDIBLE_REGION` | Which Audible store to search for audiobooks: us, uk, ca, au, de, fr, it, es, in, jp. Default us. |
+| `SIMKL_CLIENT_ID` | For the Simkl import, so the form doesn't ask for it (a free app from simkl.com/settings/developer). |
+| `RESEND_API_KEY`, `MEDIATROVE_BACKUP_EMAIL_TO`, `MEDIATROVE_BACKUP_EMAIL_FROM` | Email the weekly backup through [Resend](https://resend.com) (free tier: 3,000 emails a month). The sender must be on a domain you've verified with Resend. |
+| `MEDIATROVE_SECRET_KEY` | The key that encrypts your app logins. Normally created for you in `data/secret.key`; set this (32 bytes, base64) only if you'd rather keep it out of the data folder. |
+
+## Connecting apps
+
+Open **Marketplace**, pick your app, and sign in. MediaTrove keeps a session token (encrypted), never
+your password. For apps that support it, choose how to keep them in sync:
+
+- **Off:** MediaTrove only reads.
+- **Add only** (recommended): your marks are added to the app; nothing there is ever unmarked.
+- **Full:** your latest action wins both ways, including unmarks.
+
+Anything already marked in the app comes into MediaTrove first. Turning sync on for an existing
+connection shows what it would add before it does anything, with an option to only send new marks.
+
+## Imports
+
+**Import** page. Trakt, Letterboxd and IMDb read the export file each service lets you download.
+MyAnimeList reads a public profile by username. Simkl signs in with a code. Running an import again
+only adds what's new, and each import can be undone.
+
+## Backups
+
+**Settings, then Backups:** download everything as one file, or restore from one. A copy is also
+saved every week in `data/backups` (the last 8 are kept). App logins aren't in backups: reconnect
+your apps after restoring. Backing up the whole `data` folder covers everything, logins included.
+
+## Hosting it for friends
+
+Each MediaTrove is one person's library. To host it for others, run one copy per person: a folder
+each with its own `compose.yaml`, `.env` (with its own `MEDIATROVE_PASSWORD`) and `data`, and a
+different port each (change `"8787:8787"` to `"8788:8787"` and so on), or one subdomain each behind
+your reverse proxy. Their data lives on your server, in their folder. Accounts inside one copy are
+planned for after v0.1.
+
+## Writing a plugin
+
+See [docs/plugins.md](docs/plugins.md). A plugin is a small web service with three routes (four if it
+can keep its app in sync), in any language.
 
 ## Develop
 
@@ -37,7 +94,18 @@ pnpm test
 
 Stack: TypeScript, Hono, Drizzle + SQLite, React, Tailwind, shadcn/ui.
 
----
+## Licence and credits
 
-Movie and show data comes from [TMDB](https://www.themoviedb.org). This product uses the TMDB
-API but is not endorsed or certified by TMDB.
+MediaTrove is free software under the [GNU AGPL v3](LICENSE): you can use, change and share it, and
+if you run a changed version for others, you share your changes too.
+
+Data sources and their terms: [docs/metadata-terms.md](docs/metadata-terms.md).
+
+- Movie and show data comes from [TMDB](https://www.themoviedb.org). This product uses the TMDB API but
+  is not endorsed or certified by TMDB.
+- Audiobook data comes from Audible's public catalog.
+- Anime genres, tags and scores come from
+  [anime-offline-database](https://github.com/manami-project/anime-offline-database) by manami-project,
+  under the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/).
+- Anime id mapping: [Anime-Lists](https://github.com/Anime-Lists/anime-lists) and
+  [Fribb/anime-lists](https://github.com/Fribb/anime-lists).

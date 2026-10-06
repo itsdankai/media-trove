@@ -98,6 +98,12 @@ export class ProcessHost implements PluginHost {
     const m = (await (await fetch(`${base}/manifest.json`, { signal: AbortSignal.timeout(8000) })).json()) as Manifest;
     if (!m?.id || !m.connect || m.contract !== 1)
       throw new PluginUserError("That URL doesn't serve a MediaTrove plugin manifest.");
+    // A plugin is found by its id, and connections send their credentials to whatever answers for
+    // that id. So a URL can't claim an id that's already taken (security pass, 2026-10-06): otherwise
+    // a manifest saying "stremio" would receive the stored Stremio session on the next sync.
+    if (!/^[a-z0-9-]{1,40}$/.test(m.id)) throw new PluginUserError("That plugin's id isn't valid.");
+    const taken = this.bundledFile(m.id) || (this.custom.has(m.id) && this.custom.get(m.id) !== base);
+    if (taken) throw new PluginUserError(`A plugin called "${m.id}" is already installed.`);
     this.custom.set(m.id, base);
     this.manifests.set(m.id, m);
     this.catalogCache = null;
@@ -143,7 +149,8 @@ export class ProcessHost implements PluginHost {
     proc.status = { state: "starting", since: Date.now() };
     const child = spawn(process.execPath, ["--import", "tsx", file], {
       cwd: this.root,
-      env: { ...process.env, PORT: String(proc.port) },
+      // Only what a plugin needs to run: not MediaTrove's keys (TMDB, MEDIATROVE_SECRET_KEY) or other secrets.
+      env: { ...pluginEnv(), PORT: String(proc.port) },
       stdio: ["ignore", "inherit", "inherit"],
     });
     proc.child = child;
@@ -215,6 +222,13 @@ export class ProcessHost implements PluginHost {
       c?.kill();
     }
   }
+}
+
+/** The environment bundled plugins get: system basics, locale and proxies, nothing secret. */
+export function pluginEnv(env: NodeJS.ProcessEnv = process.env) {
+  const keep =
+    /^(PATH|PATHEXT|HOME|USERPROFILE|TEMP|TMP|TMPDIR|SYSTEMROOT|SystemRoot|COMSPEC|LANG|LC_ALL|TZ|NODE_ENV|NODE_OPTIONS|NODE_EXTRA_CA_CERTS|HTTPS?_PROXY|NO_PROXY|https?_proxy|no_proxy)$/;
+  return Object.fromEntries(Object.entries(env).filter(([k]) => keep.test(k)));
 }
 
 function freePort() {

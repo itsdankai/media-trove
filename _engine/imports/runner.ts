@@ -7,16 +7,15 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { type Db, events, idMap, imports } from "../db.ts";
 import { appendEvents, eventsFor, type NewEvent, SAME_VIEWING } from "../events.ts";
 import type { Library } from "../library.ts";
+import { createAnimeInfo } from "../metadata/animedb.ts";
 import { type MediaRef, makeKey } from "../metadata/types.ts";
 import { getSettings } from "../settings.ts";
 import { type AnimeIndex, animeEvents, loadAnimeIndex, targetFor } from "./anime.ts";
-import { anilistIdsForMal } from "./anime-lists.ts";
 import { type ImportEvent, ImportUserError, type Parsed } from "./types.ts";
 
 export const IMPORT_SOURCES = {
   trakt: { name: "Trakt", input: "file" },
   simkl: { name: "Simkl", input: "simkl" },
-  anilist: { name: "AniList", input: "username" },
   mal: { name: "MyAnimeList", input: "username" },
   letterboxd: { name: "Letterboxd", input: "file" },
   imdb: { name: "IMDb", input: "file" },
@@ -54,6 +53,7 @@ const KEEP_UNMATCHED = 100;
 
 export function createImports(db: Db, lib: Library, opts: { dataDir: string; fetchFn?: typeof fetch }) {
   const jobs = new Map<string, ImportJob>();
+  const animeInfo = createAnimeInfo(opts.dataDir, opts.fetchFn);
   let animeIndex: Promise<AnimeIndex> | null = null;
   const anime = () => {
     animeIndex ??= loadAnimeIndex(join(opts.dataDir, "anime-map.json"), opts.fetchFn).catch((e) => {
@@ -103,10 +103,10 @@ export function createImports(db: Db, lib: Library, opts: { dataDir: string; fet
         const idx = await anime();
         const unplaced = parsed.anime.filter((e) => e.ids.mal && !e.ids.anilist && !targetFor(idx, e.ids));
         if (unplaced.length) {
-          const viaAniList = await anilistIdsForMal(
-            unplaced.map((e) => e.ids.mal as number),
-            opts.fetchFn,
-          ).catch(() => new Map<number, number>());
+          // MAL ids the mapping lists lack: anime-offline-database knows each show's AniList id too.
+          const viaAniList = await animeInfo
+            .anilistIdsForMal(unplaced.map((e) => e.ids.mal as number))
+            .catch(() => new Map<number, number>());
           for (const e of unplaced) e.ids.anilist = viaAniList.get(e.ids.mal as number);
         }
         const sizes = async (tv: number) => {

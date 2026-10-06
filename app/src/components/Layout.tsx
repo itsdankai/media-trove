@@ -78,9 +78,25 @@ export function Layout() {
             {label}
           </NavLink>
         ))}
-        <p className="mt-auto px-2 text-[11px] leading-snug text-muted-foreground">
-          Movie and show data from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.
-        </p>
+        <div className="mt-auto space-y-1.5 px-2 text-[11px] leading-snug text-muted-foreground">
+          {/* TMDB's terms ask for its logo and this notice, less prominent than our own branding. */}
+          <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer" className="block w-fit">
+            <img src="/tmdb.svg" alt="TMDB" className="h-2.5" />
+          </a>
+          <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+          <p>
+            Anime data:{" "}
+            <a
+              href="https://github.com/manami-project/anime-offline-database"
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-2 hover:underline"
+            >
+              anime-offline-database
+            </a>{" "}
+            (ODbL).
+          </p>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-col pb-20 md:pb-0">

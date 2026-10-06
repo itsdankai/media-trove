@@ -3,11 +3,13 @@ import { join } from "node:path";
 import { zValidator } from "@hono/zod-validator";
 import { desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import { BackupError, exportAll, latestBackup, restore } from "./backup.ts";
 import { createCalendar } from "./calendar.ts";
 import { connections, type Db, events, type MediaRow, media } from "./db.ts";
 import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
-import { fetchAniList, fetchMal, parseAniList, parseMal } from "./imports/anime-lists.ts";
+import { fetchMal, parseMal } from "./imports/anime-lists.ts";
 import { parseImdb, parseLetterboxd } from "./imports/csv-exports.ts";
 import { readUpload } from "./imports/files.ts";
 import { createImports, IMPORT_SOURCES, type ImportSource, importSourceId } from "./imports/runner.ts";
@@ -63,7 +65,13 @@ export function createApp(
   };
 
   const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) =>
-    project(m.kind as MediaKind, list, m.extra.airedEpisodes as number | undefined, getSettings(db).watchedThreshold);
+    project(
+      m.kind as MediaKind,
+      list,
+      m.extra.airedEpisodes as number | undefined,
+      getSettings(db).watchedThreshold,
+      m.kind === "show" && typeof m.extra.status === "string" && !["Ended", "Canceled"].includes(m.extra.status),
+    );
 
   const needPlugins = () => {
     if (!plugins) throw new ProviderUnavailable("Plugins are not enabled in this instance.");
@@ -98,7 +106,7 @@ export function createApp(
     new Hono()
       .onError((err, c) => {
         if (err instanceof ProviderUnavailable) return c.json({ error: err.message }, 503);
-        if (err instanceof PluginUserError || err instanceof ImportUserError)
+        if (err instanceof PluginUserError || err instanceof ImportUserError || err instanceof BackupError)
           return c.json({ error: err.message }, 400);
         console.error(err);
         return c.json({ error: err.message }, 500);
@@ -227,6 +235,36 @@ export function createApp(
         },
       )
 
+      // --- backups ---------------------------------------------------------------------------
+      .get("/api/backup", (c) => {
+        const day = new Date().toISOString().slice(0, 10);
+        return c.body(JSON.stringify(exportAll(db)), 200, {
+          "content-type": "application/json",
+          "content-disposition": `attachment; filename="mediatrove-${day}.json"`,
+        });
+      })
+
+      .get("/api/backup/status", (c) => c.json({ latest: opts.dataDir ? latestBackup(opts.dataDir) : null }))
+
+      .post(
+        "/api/backup/restore",
+        bodyLimit({
+          maxSize: 200 * 1024 * 1024,
+          onError: (c) => c.json({ error: "That file is too big to be a MediaTrove backup." }, 413),
+        }),
+        async (c) => {
+          const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+          if (!(form.file instanceof File)) throw new BackupError("Choose a backup file.");
+          let data: unknown;
+          try {
+            data = JSON.parse(await form.file.text());
+          } catch {
+            throw new BackupError("That file isn't a MediaTrove backup.");
+          }
+          return c.json(restore(db, data));
+        },
+      )
+
       // --- one-time imports -----------------------------------------------------------------
       .get("/api/imports", (c) =>
         c.json({
@@ -263,30 +301,36 @@ export function createApp(
         return c.json({ ready: true, job });
       })
 
-      .post("/api/imports/:source", async (c) => {
-        const source = c.req.param("source") as ImportSource;
-        if (!(source in IMPORT_SOURCES)) return c.notFound();
-        const imp = needImports();
-        if (source === "anilist" || source === "mal") {
-          const body = (await c.req.json().catch(() => ({}))) as { username?: string };
-          const name = body.username?.trim() ?? "";
-          if (!/^[\w-]{2,40}$/.test(name)) throw new ImportUserError("Enter a username.");
-          const job = imp.start(source, name, async () =>
-            source === "anilist" ? parseAniList(await fetchAniList(name)) : parseMal(await fetchMal(name)),
+      // Export files are a few MB; 100 MB is generous and keeps a bad upload from filling memory.
+      .post(
+        "/api/imports/:source",
+        bodyLimit({
+          maxSize: 100 * 1024 * 1024,
+          onError: (c) => c.json({ error: "That file is too big to be an export (over 100 MB)." }, 413),
+        }),
+        async (c) => {
+          const source = c.req.param("source") as ImportSource;
+          if (!(source in IMPORT_SOURCES)) return c.notFound();
+          const imp = needImports();
+          if (source === "mal") {
+            const body = (await c.req.json().catch(() => ({}))) as { username?: string };
+            const name = body.username?.trim() ?? "";
+            if (!/^[\w-]{2,40}$/.test(name)) throw new ImportUserError("Enter a username.");
+            const job = imp.start(source, name, async () => parseMal(await fetchMal(name)));
+            return c.json(job, 202);
+          }
+          const parse = fileParsers[source];
+          const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+          const file = form.file;
+          if (!parse || !(file instanceof File)) throw new ImportUserError("Choose the export file to upload.");
+          const files = readUpload(file.name, new Uint8Array(await file.arrayBuffer()));
+          const parsed = parse(files); // parsed now, so a wrong file is reported straight away
+          return c.json(
+            imp.start(source, file.name, async () => parsed),
+            202,
           );
-          return c.json(job, 202);
-        }
-        const parse = fileParsers[source];
-        const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
-        const file = form.file;
-        if (!parse || !(file instanceof File)) throw new ImportUserError("Choose the export file to upload.");
-        const files = readUpload(file.name, new Uint8Array(await file.arrayBuffer()));
-        const parsed = parse(files); // parsed now, so a wrong file is reported straight away
-        return c.json(
-          imp.start(source, file.name, async () => parsed),
-          202,
-        );
-      })
+        },
+      )
 
       .delete("/api/imports/:source", (c) => {
         const source = c.req.param("source") as ImportSource;

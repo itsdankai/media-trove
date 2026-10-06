@@ -25,10 +25,6 @@ const guide: Record<string, { blurb: string; steps: string[]; accept?: string }>
     steps: [],
     accept: ".zip,.json",
   },
-  anilist: {
-    blurb: "Your anime list from a public AniList profile. Episodes are dated by when you finished each show.",
-    steps: ["Your list must be public (AniList Settings, then Lists)."],
-  },
   mal: {
     blurb: "Your anime list from a public MyAnimeList profile.",
     steps: ["Your list must be public (MyAnimeList Settings, then List)."],

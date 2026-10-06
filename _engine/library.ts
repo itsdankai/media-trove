@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { artwork, type Db, idMap, media } from "./db.ts";
-import { ANILIST_VERSION, createAnimeInfo } from "./metadata/anilist.ts";
+import { ANIME_DB_VERSION, createAnimeInfo } from "./metadata/animedb.ts";
 import {
   type MediaInfo,
   type MediaKind,
@@ -18,9 +18,9 @@ import {
 const RETRY_MISS_MS = 24 * 60 * 60 * 1000;
 /** The metadata version providers write now (tmdb.ts / audible.ts META_VERSION). */
 const CURRENT_META = 3;
-/** AniList extras looked up with the current tag rules (anilist.ts ANILIST_VERSION). */
-const anilistCurrent = (extra: Record<string, unknown>) =>
-  (extra.anilist as { v?: number } | undefined)?.v === ANILIST_VERSION;
+/** Anime extras looked up with the current dataset rules (animedb.ts ANIME_DB_VERSION). */
+const animeDbCurrent = (extra: Record<string, unknown>) =>
+  (extra.animeDb as { v?: number } | undefined)?.v === ANIME_DB_VERSION;
 
 /**
  * Where a connected app's own cover wins over the catalog's: merged editions (combined keys like
@@ -33,7 +33,7 @@ export function createLibrary(
   providers: MetadataProvider[],
   opts: { artworkDir?: string; dataDir?: string; fetchFn?: typeof fetch } = {},
 ) {
-  // Anime genres, tags and scores from AniList; needs the data folder for the mapping lists.
+  // Anime genres, tags and scores from anime-offline-database; needs the data folder for its cache.
   const animeInfo = opts.dataDir ? createAnimeInfo(opts.dataDir, opts.fetchFn) : null;
   const providerFor = (kind: MediaKind) => {
     const p = providers.find((x) => x.kinds.includes(kind));
@@ -50,6 +50,7 @@ export function createLibrary(
   /** Saves a plugin's cover (a data: URL) and, where it should win, shows it right away. */
   function saveArtwork(key: string, source: string, dataUrl: string) {
     if (!opts.artworkDir) return;
+    if (dataUrl.length > 8_000_000) return; // a cover never needs more than ~6 MB
     const m = dataUrl.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
     if (!m) return;
     const file = `${createHash("sha1").update(`${key}|${source}`).digest("hex").slice(0, 20)}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
@@ -68,17 +69,18 @@ export function createLibrary(
     const extra: Record<string, unknown> = { ...info.extra, subtitle: info.subtitle ?? info.extra.subtitle ?? null };
     let genres = info.genres;
     if (extra.anime === true) {
-      // Fresh TMDB details don't carry AniList's part: keep what was looked up before.
+      // Fresh TMDB details don't carry the anime dataset's part: keep what was looked up before.
       const before = db.select().from(media).where(eq(media.key, info.key)).get();
-      extra.anilist ??= before?.extra.anilist;
-      // TMDB's own values, kept so AniList's can be shown instead and TMDB's still known.
+      extra.animeDb ??= before?.extra.animeDb;
+      delete extra.anilist; // the old AniList lookups (before 2026-10-06), replaced
+      // TMDB's own values, kept so the anime dataset's can be shown instead and TMDB's still known.
       if (!("tmdbRating" in extra)) extra.tmdbRating = extra.rating ?? null;
       if (!("tmdbGenres" in extra)) extra.tmdbGenres = info.genres;
-      const a = extra.anilist as { genres: string[]; tags: string[]; score: number | null } | undefined;
+      const a = extra.animeDb as { genres: string[]; tags: string[]; score: number | null } | undefined;
       const tmdbGenres = (extra.tmdbGenres as string[]).filter((g) => g !== "Animation"); // every anime has it
       genres = a?.genres.length ? a.genres : tmdbGenres;
       extra.rating = a?.score ?? extra.tmdbRating;
-      extra.ratingSource = a?.score != null ? "AniList" : "TMDB";
+      extra.ratingSource = a?.score != null ? "anime community" : "TMDB";
       extra.tags = a?.tags ?? [];
     }
     const row = {
@@ -151,7 +153,7 @@ export function createLibrary(
           (m) =>
             m.extra.metaVersion !== CURRENT_META ||
             (m.kind === "show" && !ended.has(String(m.extra.status)) && now - m.updatedAt > day) ||
-            (m.extra.anime === true && !anilistCurrent(m.extra) && animeInfo !== null),
+            (m.extra.anime === true && !animeDbCurrent(m.extra) && animeInfo !== null),
         );
       let done = 0;
       for (let i = 0; i < stale.length; i += 3) {
@@ -162,12 +164,12 @@ export function createLibrary(
                 m.extra.metaVersion !== CURRENT_META || m.kind === "show"
                   ? upsertMedia(await providerFor(m.kind as MediaKind).details(m.key))
                   : m;
-              if (row.extra.anime === true && !anilistCurrent(row.extra) && animeInfo && m.key.startsWith("tmdb-")) {
+              if (row.extra.anime === true && !animeDbCurrent(row.extra) && animeInfo && m.key.startsWith("tmdb-")) {
                 const found = await animeInfo.extrasFor(m.kind as "movie" | "show", Number(parseKey(m.key).id));
-                // Remembered even when AniList has nothing, so it isn't asked again every run.
+                // Remembered even when the dataset has nothing, so it isn't looked up again every run.
                 row = upsertMedia({
                   ...row,
-                  extra: { ...row.extra, anilist: found ?? { genres: [], tags: [], score: null, v: ANILIST_VERSION } },
+                  extra: { ...row.extra, animeDb: found ?? { genres: [], tags: [], score: null, v: ANIME_DB_VERSION } },
                 } as MediaInfo);
               }
               done++;

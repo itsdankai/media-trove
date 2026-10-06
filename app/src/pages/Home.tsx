@@ -10,7 +10,9 @@ const icons = { movie: Clapperboard, show: Tv, audiobook: Headphones };
 export function Home() {
   const { data = [], isLoading } = useQuery({ queryKey: ["library"], queryFn: () => api.library() });
   const inProgress = data.filter((i) => i.state.status === "watching" || i.state.status === "listening");
-  const recent = data.filter((i) => i.state.status === "completed" || i.state.status === "finished").slice(0, 14);
+  const recent = data
+    .filter((i) => i.state.status === "completed" || i.state.status === "caught_up" || i.state.status === "finished")
+    .slice(0, 14);
   const count = (k: MediaKind) => data.filter((i) => i.media.kind === k).length;
 
   return (
