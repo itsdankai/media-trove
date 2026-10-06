@@ -11,6 +11,7 @@ export type CalendarEntry = {
   label: string;
   poster: string | null;
   tracked: boolean; // false: a new movie in a franchise you watched, or a new book by an author you track
+  anime: boolean;
 };
 
 export type SearchResult = {
@@ -196,9 +197,10 @@ export const api = {
   setFollowUnmarks: (id: string, followUnmarks: boolean) =>
     send<{ ok: true }>("PATCH", `/api/connections/${id}`, { followUnmarks }),
   imports: () => call<{ sources: ImportSourceInfo[]; history: ImportRun[]; simklClientId: boolean }>("/api/imports"),
-  importFile: (source: string, file: File) => {
+  importFile: (source: string, file: File, profile?: string) => {
     const body = new FormData();
     body.append("file", file);
+    if (profile) body.append("profile", profile);
     return call<ImportJob>(`/api/imports/${source}`, { method: "POST", body });
   },
   importUser: (source: string, username: string) => send<ImportJob>("POST", `/api/imports/${source}`, { username }),

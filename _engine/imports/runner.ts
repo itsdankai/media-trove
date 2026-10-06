@@ -18,6 +18,7 @@ export const IMPORT_SOURCES = {
   simkl: { name: "Simkl", input: "simkl" },
   mal: { name: "MyAnimeList", input: "username" },
   letterboxd: { name: "Letterboxd", input: "file" },
+  netflix: { name: "Netflix", input: "file" },
   imdb: { name: "IMDb", input: "file" },
 } as const;
 export type ImportSource = keyof typeof IMPORT_SOURCES;
@@ -206,7 +207,12 @@ export function createImports(db: Db, lib: Library, opts: { dataDir: string; fet
   }
 
   type Hit = { key: string; season?: number; episode?: number };
-  const refId = (e: ImportEvent) => (e.episodeImdb ? `ep:${e.episodeImdb}` : JSON.stringify(e.media));
+  const refId = (e: ImportEvent) =>
+    e.episodeImdb
+      ? `ep:${e.episodeImdb}`
+      : e.episodeTitle
+        ? `title:${e.media.title}|${e.season ?? ""}|${e.episodeTitle}`
+        : JSON.stringify(e.media);
 
   /** Matches each distinct title once, a few at a time. */
   async function matchAll(list: ImportEvent[], job: ImportJob) {
@@ -229,6 +235,7 @@ export function createImports(db: Db, lib: Library, opts: { dataDir: string; fet
   }
 
   async function matchOne(e: ImportEvent): Promise<Hit | null> {
+    if (e.episodeTitle) return matchByEpisodeTitle(e);
     if (!e.episodeImdb) {
       const key = await lib.resolve(e.media as MediaRef);
       return key ? { key } : null;
@@ -246,6 +253,67 @@ export function createImports(db: Db, lib: Library, opts: { dataDir: string; fet
     if (!value) return null;
     const [key, season, episode] = value.split("|");
     return { key, season: Number(season), episode: Number(episode) };
+  }
+
+  /** Episode lists per show and season, fetched once per run. */
+  const seasonEpisodes = new Map<string, Promise<{ number: number; name: string }[]>>();
+  const episodesOf = (key: string, season: number) => {
+    const id = `${key}|${season}`;
+    if (!seasonEpisodes.has(id))
+      seasonEpisodes.set(
+        id,
+        (lib.providerFor("show").season?.(key, season) ?? Promise.resolve([])).catch(() => []),
+      );
+    return seasonEpisodes.get(id) as Promise<{ number: number; name: string }[]>;
+  };
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+  /**
+   * Netflix names episodes, not numbers: find the show by name, then the episode by its title in the
+   * given season (or any season). "Episode 3" titles match by number. No episode match and no season in
+   * the title: it may be a movie with a colon ("Glass Onion: A Knives Out Mystery"), so try that.
+   * Answers are cached in id_map, so a rerun doesn't look anything up again.
+   */
+  async function matchByEpisodeTitle(e: ImportEvent): Promise<Hit | null> {
+    const ref = `title-episode:${norm(e.media.title ?? "")}|${e.season ?? ""}|${norm(e.episodeTitle ?? "")}`;
+    const cached = db.select().from(idMap).where(eq(idMap.ref, ref)).get();
+    let value = cached?.mediaKey ?? null;
+    if (!cached) {
+      value = await findByEpisodeTitle(e);
+      db.insert(idMap).values({ ref, mediaKey: value, checkedAt: Date.now() }).onConflictDoNothing().run();
+    }
+    if (!value) return null;
+    const [key, season, episode] = value.split("|");
+    return season ? { key, season: Number(season), episode: Number(episode) } : { key };
+  }
+
+  async function findByEpisodeTitle(e: ImportEvent): Promise<string | null> {
+    const show = await lib.resolve({ kind: "show", title: e.media.title }).catch(() => null);
+    if (show) {
+      const want = norm(e.episodeTitle ?? "");
+      const numbered = want.match(/^episode (\d+)$/);
+      const info = await lib.ensureMedia(show);
+      const all = (((info.extra as Record<string, unknown>).seasons as { number: number }[] | undefined) ?? []).map(
+        (s) => s.number,
+      );
+      const order = e.season != null ? [e.season, ...all.filter((n) => n !== e.season)] : all;
+      for (const s of order) {
+        const eps = await episodesOf(show, s);
+        const hit =
+          numbered && s === e.season
+            ? eps.find((x) => x.number === Number(numbered[1]))
+            : eps.find((x) => norm(x.name) === want);
+        if (hit) return `${show}|${s}|${hit.number}`;
+      }
+    }
+    if (e.season == null && e.fullTitle) return lib.resolve({ kind: "movie", title: e.fullTitle }).catch(() => null);
+    return null;
   }
 
   /** Undoes an import: drops every event it added. The user's own entries and app syncs stay. */

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { api, type ImportJob, type ImportSourceInfo, timeAgo } from "@/lib/api";
 
 /** How to get each service's export, shown in its dialog. */
-const guide: Record<string, { blurb: string; steps: string[]; accept?: string }> = {
+const guide: Record<string, { blurb: string; steps: string[]; accept?: string; profile?: boolean }> = {
   trakt: {
     blurb: "Every movie and episode you've watched, with the date of each play.",
     steps: [
@@ -37,6 +37,17 @@ const guide: Record<string, { blurb: string; steps: string[]; accept?: string }>
       "Upload the ZIP here, or just its diary.csv.",
     ],
     accept: ".zip,.csv",
+  },
+  netflix: {
+    blurb: "Everything a Netflix profile watched, matched to shows and movies by title.",
+    steps: [
+      "On netflix.com: Account, then Profiles, pick yours, then Viewing activity, then Download all.",
+      "Or, for every profile and exact times (and after cancelling): Account, then Get my info. Netflix emails a ZIP when it's ready.",
+      "Upload the CSV or the ZIP as it is. For the ZIP, enter your profile's name too.",
+      "From the ZIP, trailers and anything played under 5 minutes are left out.",
+    ],
+    accept: ".csv,.zip",
+    profile: true,
   },
   imdb: {
     blurb: "Titles you rated count as watched, dated when you rated them. Single episodes come in too.",
@@ -184,7 +195,9 @@ function ImportDialog({
               </ol>
             ) : null}
             {source.input === "username" && <UsernameForm source={source.id} onJob={setJobId} />}
-            {source.input === "file" && <FileForm source={source.id} accept={g?.accept} onJob={setJobId} />}
+            {source.input === "file" && (
+              <FileForm source={source.id} accept={g?.accept} profile={g?.profile} onJob={setJobId} />
+            )}
             {source.input === "simkl" && (
               <>
                 <SimklSignIn configured={simklConfigured} onJob={setJobId} />
@@ -203,10 +216,21 @@ function ImportDialog({
   );
 }
 
-function FileForm({ source, accept, onJob }: { source: string; accept?: string; onJob: (id: string) => void }) {
+function FileForm({
+  source,
+  accept,
+  profile,
+  onJob,
+}: {
+  source: string;
+  accept?: string;
+  profile?: boolean; // ask which profile (Netflix's "Get my info" ZIP covers every profile)
+  onJob: (id: string) => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
+  const [profileName, setProfileName] = useState("");
   const start = useMutation({
-    mutationFn: () => api.importFile(source, file as File),
+    mutationFn: () => api.importFile(source, file as File, profileName.trim() || undefined),
     onSuccess: (job) => onJob(job.id),
   });
   return (
@@ -225,6 +249,18 @@ function FileForm({ source, accept, onJob }: { source: string; accept?: string; 
         required
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
       />
+      {profile && (
+        <>
+          <Label htmlFor={`profile-${source}`}>Profile (for the ZIP)</Label>
+          <Input
+            id={`profile-${source}`}
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            placeholder="Your profile's name"
+            autoComplete="off"
+          />
+        </>
+      )}
       {start.error && <p className="text-sm text-destructive">{start.error.message}</p>}
       <Button type="submit" className="w-full" disabled={!file || start.isPending}>
         {start.isPending ? "Uploading…" : "Import"}

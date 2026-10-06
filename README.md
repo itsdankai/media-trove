@@ -8,7 +8,7 @@ audiobooks, with more media types to come.
   with your server and login, and what you watch is tracked automatically. Stremio, Nuvio and Jellyfin
   can also be kept in sync: mark something in MediaTrove and it's marked there too.
 - **A release calendar** of new episodes, sequels and audiobooks from authors you follow.
-- **One-time imports** from Trakt, Simkl, MyAnimeList, Letterboxd and IMDb.
+- **One-time imports** from Trakt, Simkl, MyAnimeList, Letterboxd, IMDb and Netflix.
 - **Backups**: download everything as one file, and a copy is saved every week.
 
 **Status:** v0.1, early but complete for movies, shows, anime and audiobooks.
@@ -33,6 +33,10 @@ Open http://localhost:8787 (or this machine's address, port 8787). The first scr
 question, then you're in. Your library lives in `./data` next to `compose.yaml`.
 
 To update later: `docker compose pull && docker compose up -d`.
+
+**Stable or nightly.** `compose.yaml` runs `:latest`, which only changes when a version is released.
+To try the newest work before release, change the image to `ghcr.io/itsdankai/media-trove:nightly`
+(rebuilt on every change; may have rough edges). Your data works with both.
 
 ## Settings
 
@@ -61,7 +65,8 @@ connection shows what it would add before it does anything, with an option to on
 
 ## Imports
 
-**Import** page. Trakt, Letterboxd and IMDb read the export file each service lets you download.
+**Import** page. Trakt, Letterboxd, IMDb and Netflix read the export file each service lets you download
+(Netflix: a profile's "Viewing activity" download, or the "Get my info" ZIP, which covers every profile).
 MyAnimeList reads a public profile by username. Simkl signs in with a code. Running an import again
 only adds what's new, and each import can be undone.
 
