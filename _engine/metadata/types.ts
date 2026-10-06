@@ -26,6 +26,8 @@ export interface MetadataProvider {
   season?(key: string, n: number): Promise<Episode[]>;
   /** Turns a plugin's description of a title (imdb id, asin, title…) into a media key, or null. */
   resolve?(ref: MediaRef): Promise<string | null>;
+  /** An episode's own IMDb id (IMDb exports rate single episodes) -> its show key, season and number. */
+  findEpisode?(imdb: string): Promise<{ key: string; season: number; episode: number } | null>;
 }
 
 export type { MediaRef } from "../../plugins/_sdk/index.ts";

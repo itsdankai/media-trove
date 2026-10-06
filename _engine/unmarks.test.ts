@@ -47,6 +47,11 @@ describe("follow unmarks (sync rule 4, amended)", () => {
     expect(r.state.watchedEpisodes).toEqual(["s1e1"]);
   });
 
+  it("the user's mark close to an app's mark still survives that app's later unmark", () => {
+    const r = fold([ep("watched", "stremio", 1), ep("watched", "manual", 2), ep("unwatched", "nuvio", 3)], true);
+    expect(r.state.watchedEpisodes).toEqual(["s1e1"]);
+  });
+
   it("the user's unmark still clears everything", () => {
     const r = fold([ep("watched", "stremio", 1), ep("watched", "nuvio", 2), ep("unwatched", "manual", 3)], true);
     expect(r.state.watchedEpisodes).toEqual([]);

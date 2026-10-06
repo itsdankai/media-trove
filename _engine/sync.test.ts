@@ -62,9 +62,17 @@ describe("sync rules", () => {
     const twice = fold("movie", [
       ev({ progress: 0.95, occurredAt: at(1) }),
       ev({ progress: 0.2, occurredAt: at(2) }),
-      ev({ progress: 0.97, occurredAt: at(3) }),
+      ev({ progress: 0.97, occurredAt: "2026-10-06T20:03:00.000Z" }), // the next day: a real rewatch
     ]);
     expect(twice.watchCount).toBe(2);
+  });
+
+  it("one viewing reported by two apps (Nuvio and Stremio share state) counts once", () => {
+    const s = fold("movie", [
+      ev({ kind: "watched", source: "nuvio", occurredAt: at(1) }),
+      ev({ kind: "watched", source: "stremio", occurredAt: at(1) }),
+    ]);
+    expect(s.watchCount).toBe(1);
   });
 
   it("rule 3: changing the threshold to 80% re-folds 85% as watched", () => {
