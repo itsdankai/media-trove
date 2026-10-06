@@ -6,6 +6,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { connections, type Db, events, type MediaRow, media } from "./db.ts";
 import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
+import { fetchAniList, fetchMal, parseAniList, parseMal } from "./imports/anime-lists.ts";
+import { parseImdb, parseLetterboxd } from "./imports/csv-exports.ts";
+import { readUpload } from "./imports/files.ts";
+import { createImports, IMPORT_SOURCES, type ImportSource, importSourceId } from "./imports/runner.ts";
+import { parseSimkl, parseSimklFiles, simklDownload, simklPin, simklPinToken } from "./imports/simkl.ts";
+import { parseTrakt } from "./imports/trakt.ts";
+import { ImportUserError, type Parsed, type UploadFile } from "./imports/types.ts";
 import { createLibrary } from "./library.ts";
 import { type MediaKind, type MetadataProvider, mediaKinds, ProviderUnavailable, parseKey } from "./metadata/types.ts";
 import { type PluginHost, PluginUserError } from "./plugins/host.ts";
@@ -29,9 +36,21 @@ export function createApp(
   db: Db,
   providers: MetadataProvider[],
   plugins?: Plugins,
-  opts: { artworkDir?: string } = {},
+  opts: { artworkDir?: string; dataDir?: string; fetchFn?: typeof fetch } = {},
 ) {
   const lib = createLibrary(db, providers, opts);
+  const imports = opts.dataDir ? createImports(db, lib, { dataDir: opts.dataDir, fetchFn: opts.fetchFn }) : null;
+  const needImports = () => {
+    if (!imports) throw new ProviderUnavailable("Imports are not enabled in this instance.");
+    return imports;
+  };
+  const simklCodes = new Map<string, string>(); // PIN code -> the client id it was issued for
+  const fileParsers: Partial<Record<ImportSource, (files: UploadFile[]) => Parsed>> = {
+    trakt: parseTrakt,
+    simkl: parseSimklFiles,
+    letterboxd: parseLetterboxd,
+    imdb: parseImdb,
+  };
 
   const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) =>
     project(m.kind as MediaKind, list, m.extra.airedEpisodes as number | undefined, getSettings(db).watchedThreshold);
@@ -44,6 +63,8 @@ export function createApp(
   /** Plugin id -> display name, for "via Stremio". */
   async function sourceNames() {
     const names: Record<string, string> = { [MANUAL]: "You" };
+    for (const [id, s] of Object.entries(IMPORT_SOURCES))
+      names[importSourceId(id as ImportSource)] = `${s.name} import`;
     if (plugins) for (const p of await plugins.host.catalog().catch(() => [])) names[p.id] = p.name;
     return names;
   }
@@ -64,7 +85,8 @@ export function createApp(
     new Hono()
       .onError((err, c) => {
         if (err instanceof ProviderUnavailable) return c.json({ error: err.message }, 503);
-        if (err instanceof PluginUserError) return c.json({ error: err.message }, 400);
+        if (err instanceof PluginUserError || err instanceof ImportUserError)
+          return c.json({ error: err.message }, 400);
         console.error(err);
         return c.json({ error: err.message }, 500);
       })
@@ -175,6 +197,73 @@ export function createApp(
           return c.json(rows.map((r) => ({ ...r, sourceName: names[r.event.source] ?? r.event.source })));
         },
       )
+
+      // --- one-time imports -----------------------------------------------------------------
+      .get("/api/imports", (c) =>
+        c.json({
+          sources: Object.entries(IMPORT_SOURCES).map(([id, s]) => ({ id, ...s })),
+          history: needImports().history(),
+          simklClientId: Boolean(process.env.SIMKL_CLIENT_ID),
+        }),
+      )
+
+      .get("/api/imports/jobs/:id", (c) => {
+        const job = needImports().job(c.req.param("id"));
+        return job ? c.json(job) : c.notFound();
+      })
+
+      // Simkl sign-in: get a code for simkl.com/pin, then poll until the user has entered it.
+      .post("/api/imports/simkl/pin", zValidator("json", z.object({ clientId: z.string().optional() })), async (c) => {
+        const clientId = c.req.valid("json").clientId?.trim() || process.env.SIMKL_CLIENT_ID;
+        if (!clientId) throw new ImportUserError("Enter your Simkl app's client id.");
+        const pin = await simklPin(clientId);
+        simklCodes.set(pin.userCode, clientId);
+        return c.json(pin);
+      })
+
+      .post("/api/imports/simkl/pin/:code", async (c) => {
+        const code = c.req.param("code");
+        const clientId = simklCodes.get(code);
+        if (!clientId) throw new ImportUserError("That code has expired. Start again.");
+        const token = await simklPinToken(clientId, code);
+        if (!token) return c.json({ ready: false });
+        simklCodes.delete(code);
+        const job = needImports().start("simkl", "Simkl account", async () =>
+          parseSimkl(await simklDownload(clientId, token)),
+        );
+        return c.json({ ready: true, job });
+      })
+
+      .post("/api/imports/:source", async (c) => {
+        const source = c.req.param("source") as ImportSource;
+        if (!(source in IMPORT_SOURCES)) return c.notFound();
+        const imp = needImports();
+        if (source === "anilist" || source === "mal") {
+          const body = (await c.req.json().catch(() => ({}))) as { username?: string };
+          const name = body.username?.trim() ?? "";
+          if (!/^[\w-]{2,40}$/.test(name)) throw new ImportUserError("Enter a username.");
+          const job = imp.start(source, name, async () =>
+            source === "anilist" ? parseAniList(await fetchAniList(name)) : parseMal(await fetchMal(name)),
+          );
+          return c.json(job, 202);
+        }
+        const parse = fileParsers[source];
+        const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+        const file = form.file;
+        if (!parse || !(file instanceof File)) throw new ImportUserError("Choose the export file to upload.");
+        const files = readUpload(file.name, new Uint8Array(await file.arrayBuffer()));
+        const parsed = parse(files); // parsed now, so a wrong file is reported straight away
+        return c.json(
+          imp.start(source, file.name, async () => parsed),
+          202,
+        );
+      })
+
+      .delete("/api/imports/:source", (c) => {
+        const source = c.req.param("source") as ImportSource;
+        if (!(source in IMPORT_SOURCES)) return c.notFound();
+        return c.json({ removed: needImports().remove(source) });
+      })
 
       // --- marketplace & connections ----------------------------------------------------------
       .get("/api/marketplace", zValidator("query", z.object({ q: z.string().optional() })), async (c) => {

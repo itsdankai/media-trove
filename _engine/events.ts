@@ -17,6 +17,8 @@ export const MANUAL = "manual";
 export const DEFAULT_THRESHOLD = 0.9;
 /** Audiobooks count as finished at 99%: apps often stop a few seconds short (end credits) without marking them done. */
 export const BOOK_DONE = 0.99;
+/** Watches of the same movie or episode this close together, from any sources, are one viewing. */
+export const SAME_VIEWING = 12 * 60 * 60 * 1000;
 
 /** Same content, same id. A plugin re-sending an event it already sent changes nothing. */
 export function eventId(e: NewEvent) {
@@ -83,35 +85,36 @@ export const episodeTag = (season: number, episode: number) => `s${season}e${epi
  * afterwards starts a new viewing instead of undoing the watch.
  */
 class Viewing {
-  bySource = new Map<string, number>(); // watches, kept per source so an unmark only cancels its own
+  marks: { source: string; at: number }[] = []; // counted watches, with their source so unmarks can pick
   counted = false; // has the current viewing already been counted?
   progress: number | null = null; // unfinished progress of the current viewing
 
   get watches() {
-    let n = 0;
-    for (const v of this.bySource.values()) n += v;
-    return n;
+    return this.marks.length;
   }
 
-  private add(source: string) {
-    this.bySource.set(source, (this.bySource.get(source) ?? 0) + 1);
+  /** Apps that share state (Nuvio and Stremio) report one viewing each; within SAME_VIEWING it counts once. */
+  private add(e: EventRow) {
+    const at = Date.parse(e.occurredAt);
+    const same = this.marks.find((m) => Math.abs(m.at - at) < SAME_VIEWING);
+    if (!same) this.marks.push({ source: e.source, at });
+    else if (e.source === MANUAL) same.source = MANUAL; // the user's own mark must outlive an app's unmark
   }
 
   apply(e: EventRow, threshold: number) {
     if (e.kind === "watched") {
-      this.add(e.source);
+      this.add(e);
       this.counted = true;
       this.progress = null;
     } else if (e.kind === "unwatched") {
       // Latest action wins (rule 4, amended twice — builder, 2026-10-06): an unmark from any app clears
       // every app's earlier marks; only the user's own marks survive it. The user's unmark clears all.
-      if (e.source === MANUAL) this.bySource.clear();
-      else for (const s of [...this.bySource.keys()]) if (s !== MANUAL) this.bySource.delete(s);
+      this.marks = e.source === MANUAL ? [] : this.marks.filter((m) => m.source === MANUAL);
       this.counted = this.watches > 0;
       this.progress = null;
     } else if (e.kind === "progress" && e.progress != null) {
       if (e.progress >= threshold) {
-        if (!this.counted) this.add(e.source);
+        if (!this.counted) this.add(e);
         this.counted = true;
         this.progress = null;
       } else {

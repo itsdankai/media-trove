@@ -30,7 +30,7 @@ const sync = createSync(db, createLibrary(db, providers, { artworkDir }), host, 
 const stopSchedule = sync.schedule();
 
 const app = new Hono()
-  .route("/", createApp(db, providers, { host, sync }, { artworkDir }))
+  .route("/", createApp(db, providers, { host, sync }, { artworkDir, dataDir }))
   .use("/*", serveStatic({ root }))
   // Client-side routes (/shows, /media/…) all load the same page.
   .get("*", (c) => {
