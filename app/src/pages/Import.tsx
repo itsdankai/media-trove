@@ -62,7 +62,9 @@ export function Import() {
     onSuccess: () => qc.invalidateQueries(),
   });
   const names = Object.fromEntries((data?.sources ?? []).map((s) => [s.id, s.name]));
-  const imported = [...new Set((data?.history ?? []).filter((r) => !r.error).map((r) => r.source))];
+  // Newest successful run per service (history comes newest first).
+  const latestRun = new Map<string, string>();
+  for (const r of data?.history ?? []) if (!r.error && !latestRun.has(r.source)) latestRun.set(r.source, r.id);
 
   return (
     <div className="space-y-6">
@@ -99,42 +101,49 @@ export function Import() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Past imports</h2>
           <ul className="divide-y rounded-xl border text-sm">
-            {data.history.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                <span>
-                  <strong>{names[r.source] ?? r.source}</strong> · {r.label}
-                </span>
-                <span className="text-muted-foreground">
-                  {r.error
-                    ? r.error
-                    : `${r.summary.added} added · ${r.summary.titles} titles · ${r.summary.unmatched} not matched`}{" "}
-                  · {timeAgo(r.finishedAt)}
-                </span>
-              </li>
-            ))}
+            {data.history.map((r) => {
+              // Undo removes everything a service's imports added, so it sits on that service's latest run.
+              const undoHere = !r.error && !r.undone && latestRun.get(r.source) === r.id;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  {undoHere ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={remove.isPending}
+                      title={`Remove everything imported from ${names[r.source]}. Your own entries and app syncs stay.`}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Remove everything the ${names[r.source]} import added? Your own entries and app syncs stay.`,
+                          )
+                        )
+                          remove.mutate(r.source);
+                      }}
+                    >
+                      <Undo2 /> Undo
+                    </Button>
+                  ) : (
+                    // Same size as the button, so every row lines up.
+                    <Button size="sm" variant="outline" className="invisible" tabIndex={-1} aria-hidden>
+                      <Undo2 /> Undo
+                    </Button>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <strong>{names[r.source] ?? r.source}</strong> · {r.label}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {r.error
+                      ? r.error
+                      : r.undone
+                        ? "Undone"
+                        : `${r.summary.added} added · ${r.summary.titles} titles · ${r.summary.unmatched} not matched`}{" "}
+                    · {timeAgo(r.finishedAt)}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
-          {imported.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {imported.map((source) => (
-                <Button
-                  key={source}
-                  size="sm"
-                  variant="outline"
-                  disabled={remove.isPending}
-                  onClick={() => {
-                    if (
-                      confirm(
-                        `Remove everything the ${names[source]} import added? Your own entries and app syncs stay.`,
-                      )
-                    )
-                      remove.mutate(source);
-                  }}
-                >
-                  <Undo2 /> Undo {names[source]} import
-                </Button>
-              ))}
-            </div>
-          )}
           {remove.isSuccess && (
             <p className="text-sm text-muted-foreground">Removed {remove.data.removed} imported entries.</p>
           )}

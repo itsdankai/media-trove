@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { artwork, type Db, idMap, media } from "./db.ts";
+import { ANILIST_VERSION, createAnimeInfo } from "./metadata/anilist.ts";
 import {
   type MediaInfo,
   type MediaKind,
@@ -15,6 +16,11 @@ import {
 } from "./metadata/types.ts";
 
 const RETRY_MISS_MS = 24 * 60 * 60 * 1000;
+/** The metadata version providers write now (tmdb.ts / audible.ts META_VERSION). */
+const CURRENT_META = 3;
+/** AniList extras looked up with the current tag rules (anilist.ts ANILIST_VERSION). */
+const anilistCurrent = (extra: Record<string, unknown>) =>
+  (extra.anilist as { v?: number } | undefined)?.v === ANILIST_VERSION;
 
 /**
  * Where a connected app's own cover wins over the catalog's: merged editions (combined keys like
@@ -22,7 +28,13 @@ const RETRY_MISS_MS = 24 * 60 * 60 * 1000;
  */
 const preferSourceArt = (key: string) => key.includes("+");
 
-export function createLibrary(db: Db, providers: MetadataProvider[], opts: { artworkDir?: string } = {}) {
+export function createLibrary(
+  db: Db,
+  providers: MetadataProvider[],
+  opts: { artworkDir?: string; dataDir?: string; fetchFn?: typeof fetch } = {},
+) {
+  // Anime genres, tags and scores from AniList; needs the data folder for the mapping lists.
+  const animeInfo = opts.dataDir ? createAnimeInfo(opts.dataDir, opts.fetchFn) : null;
   const providerFor = (kind: MediaKind) => {
     const p = providers.find((x) => x.kinds.includes(kind));
     if (!p) throw new ProviderUnavailable(`No metadata source for ${kind}`);
@@ -53,6 +65,22 @@ export function createLibrary(db: Db, providers: MetadataProvider[], opts: { art
   }
 
   function upsertMedia(info: MediaInfo) {
+    const extra: Record<string, unknown> = { ...info.extra, subtitle: info.subtitle ?? info.extra.subtitle ?? null };
+    let genres = info.genres;
+    if (extra.anime === true) {
+      // Fresh TMDB details don't carry AniList's part: keep what was looked up before.
+      const before = db.select().from(media).where(eq(media.key, info.key)).get();
+      extra.anilist ??= before?.extra.anilist;
+      // TMDB's own values, kept so AniList's can be shown instead and TMDB's still known.
+      if (!("tmdbRating" in extra)) extra.tmdbRating = extra.rating ?? null;
+      if (!("tmdbGenres" in extra)) extra.tmdbGenres = info.genres;
+      const a = extra.anilist as { genres: string[]; tags: string[]; score: number | null } | undefined;
+      const tmdbGenres = (extra.tmdbGenres as string[]).filter((g) => g !== "Animation"); // every anime has it
+      genres = a?.genres.length ? a.genres : tmdbGenres;
+      extra.rating = a?.score ?? extra.tmdbRating;
+      extra.ratingSource = a?.score != null ? "AniList" : "TMDB";
+      extra.tags = a?.tags ?? [];
+    }
     const row = {
       key: info.key,
       kind: info.kind,
@@ -60,8 +88,8 @@ export function createLibrary(db: Db, providers: MetadataProvider[], opts: { art
       year: info.year,
       poster: sourcePoster(info.key) ?? info.poster,
       overview: info.overview,
-      genres: info.genres,
-      extra: { ...info.extra, subtitle: info.subtitle ?? null },
+      genres,
+      extra,
       updatedAt: Date.now(),
     };
     db.insert(media).values(row).onConflictDoUpdate({ target: media.key, set: row }).run();
@@ -105,7 +133,58 @@ export function createLibrary(db: Db, providers: MetadataProvider[], opts: { art
     return key;
   }
 
-  return { providerFor, upsertMedia, ensureMedia, resolve, saveArtwork, artworkDir: opts.artworkDir };
+  /**
+   * Fetches details again where the cache is behind: rows from before a provider added fields
+   * (extra.metaVersion), and shows still airing whose next episode may have moved (daily).
+   * A few at a time; a failure leaves the old row in place for the next run.
+   */
+  let refreshing: Promise<number> | null = null;
+  function refreshStale(now = Date.now()) {
+    refreshing ??= (async () => {
+      const day = 24 * 60 * 60 * 1000;
+      const ended = new Set(["Ended", "Canceled"]);
+      const stale = db
+        .select()
+        .from(media)
+        .all()
+        .filter(
+          (m) =>
+            m.extra.metaVersion !== CURRENT_META ||
+            (m.kind === "show" && !ended.has(String(m.extra.status)) && now - m.updatedAt > day) ||
+            (m.extra.anime === true && !anilistCurrent(m.extra) && animeInfo !== null),
+        );
+      let done = 0;
+      for (let i = 0; i < stale.length; i += 3) {
+        await Promise.all(
+          stale.slice(i, i + 3).map(async (m) => {
+            try {
+              let row =
+                m.extra.metaVersion !== CURRENT_META || m.kind === "show"
+                  ? upsertMedia(await providerFor(m.kind as MediaKind).details(m.key))
+                  : m;
+              if (row.extra.anime === true && !anilistCurrent(row.extra) && animeInfo && m.key.startsWith("tmdb-")) {
+                const found = await animeInfo.extrasFor(m.kind as "movie" | "show", Number(parseKey(m.key).id));
+                // Remembered even when AniList has nothing, so it isn't asked again every run.
+                row = upsertMedia({
+                  ...row,
+                  extra: { ...row.extra, anilist: found ?? { genres: [], tags: [], score: null, v: ANILIST_VERSION } },
+                } as MediaInfo);
+              }
+              done++;
+            } catch (e) {
+              console.error("refresh:", m.key, (e as Error).message);
+            }
+          }),
+        );
+      }
+      return done;
+    })().finally(() => {
+      refreshing = null;
+    });
+    return refreshing;
+  }
+
+  return { providerFor, upsertMedia, ensureMedia, resolve, saveArtwork, refreshStale, artworkDir: opts.artworkDir };
 }
 
 export type Library = ReturnType<typeof createLibrary>;

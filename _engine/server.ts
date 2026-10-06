@@ -28,13 +28,16 @@ const host = new ProcessHost(projectRoot, {
 });
 const artworkDir = join(dataDir, "artwork");
 const key = loadKey(dataDir);
-const lib = createLibrary(db, providers, { artworkDir });
+const lib = createLibrary(db, providers, { artworkDir, dataDir });
 const writeback = createWriteback(db, lib, host, key);
 // Pull first, then push: after each complete sync, connections kept in sync get MediaTrove's changes.
 const sync = createSync(db, lib, host, key, {
   afterSync: (id) => void writeback.push(id).catch((e) => console.error("push:", e)),
 });
 const stopSchedule = sync.schedule();
+// Keep cached metadata current: older rows gain new fields, airing shows get their next episode.
+void lib.refreshStale().then((n) => n && console.log(`refreshed ${n} titles`));
+const refreshTimer = setInterval(() => void lib.refreshStale(), 6 * 60 * 60 * 1000);
 
 const app = new Hono()
   .route("/", createApp(db, providers, { host, sync, writeback }, { artworkDir, dataDir }))
@@ -55,6 +58,7 @@ const server = serve({ fetch: app.fetch, port }, () =>
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
     stopSchedule();
+    clearInterval(refreshTimer);
     host.stopAll();
     server.close(() => process.exit(0));
   });

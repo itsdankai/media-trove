@@ -94,6 +94,7 @@ export const imports = sqliteTable("imports", {
   finishedAt: integer("finished_at").notNull(),
   summary: text("summary").notNull(), // JSON ImportSummary
   error: text("error"),
+  undoneAt: integer("undone_at"), // Undo removed what this service's imports added
 });
 
 const ddl = `
@@ -103,7 +104,7 @@ CREATE TABLE IF NOT EXISTS pushes (
   PRIMARY KEY (connection_id, media_key, season, episode));
 CREATE TABLE IF NOT EXISTS imports (
   id TEXT PRIMARY KEY, source TEXT NOT NULL, label TEXT NOT NULL, started_at INTEGER NOT NULL,
-  finished_at INTEGER NOT NULL, summary TEXT NOT NULL, error TEXT);
+  finished_at INTEGER NOT NULL, summary TEXT NOT NULL, error TEXT, undone_at INTEGER);
 CREATE TABLE IF NOT EXISTS artwork (
   media_key TEXT NOT NULL, source TEXT NOT NULL, file TEXT NOT NULL, updated_at INTEGER NOT NULL,
   PRIMARY KEY (media_key, source));
@@ -133,6 +134,7 @@ export function openDb(file: string) {
   if (!has("connections", "follow_unmarks")) {
     sqlite.exec("ALTER TABLE connections ADD COLUMN follow_unmarks INTEGER NOT NULL DEFAULT 1");
   }
+  if (!has("imports", "undone_at")) sqlite.exec("ALTER TABLE imports ADD COLUMN undone_at INTEGER");
   if (!has("connections", "sync_mode")) {
     sqlite.exec(`ALTER TABLE connections ADD COLUMN sync_mode TEXT NOT NULL DEFAULT 'off';
       ALTER TABLE connections ADD COLUMN sync_mode_since INTEGER;

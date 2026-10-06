@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import { Layout } from "./components/Layout.tsx";
+import { Calendar } from "./pages/Calendar.tsx";
 import { Detail } from "./pages/Detail.tsx";
 import { History } from "./pages/History.tsx";
 import { Home } from "./pages/Home.tsx";
@@ -24,9 +25,11 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Home />} />
-            <Route path="movies" element={<Library kind="movie" />} />
-            <Route path="shows" element={<Library kind="show" />} />
-            <Route path="audiobooks" element={<Library kind="audiobook" />} />
+            <Route path="movies" element={<Library section="movie" />} />
+            <Route path="shows" element={<Library section="show" />} />
+            <Route path="audiobooks" element={<Library section="audiobook" />} />
+            <Route path="anime" element={<Library section="anime" />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="history" element={<History />} />
             <Route path="search" element={<Search />} />
             <Route path="media/:key" element={<Detail />} />

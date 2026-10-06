@@ -1,52 +1,166 @@
 import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, completion, kindLabel, type MediaKind, statusLabel, type TrackState } from "@/lib/api";
+import { api, completion, kindLabel, type MediaKind, type Section, statusLabel, type TrackState } from "@/lib/api";
 
-// Full filters (genre, year, rating) arrive in phase 6; status is enough to start.
-const statuses: Record<MediaKind, TrackState["status"][]> = {
+const statuses: Record<Section, TrackState["status"][]> = {
   movie: ["watching", "completed"],
   show: ["watching", "completed"],
+  anime: ["watching", "completed"],
   audiobook: ["listening", "finished"],
 };
 
-export function Library({ kind }: { kind: MediaKind }) {
-  // The filter lives in the URL (?status=listening) so Back from an item returns to the same view.
+const title: Record<Section, string> = { ...kindLabel, anime: "Anime" };
+
+/** Minimum ratings that can be offered: out of 10 (TMDB; AniList for anime), Audible out of 5. */
+const ratingSteps = (section: Section) => (section === "audiobook" ? [3.5, 4, 4.5] : [6, 7, 8, 9]);
+const ratingSource: Record<Section, string> = {
+  movie: "on TMDB",
+  show: "on TMDB",
+  anime: "on AniList",
+  audiobook: "stars",
+};
+
+export function Library({ section }: { section: Section }) {
+  // Filters live in the URL (?status=watching&genre=Drama…) so Back from an item returns to the same view.
   const [params, setParams] = useSearchParams();
-  const status = params.get("status") ?? "all";
-  const setStatus = (s: string) => setParams(s === "all" ? {} : { status: s }, { replace: true });
-  const { data, isLoading } = useQuery({ queryKey: ["library", kind], queryFn: () => api.library(kind) });
-  const items = (data ?? []).filter((i) => status === "all" || i.state.status === status);
+  const f = {
+    status: params.get("status") ?? "all",
+    type: params.get("type") ?? "all", // anime only: show | movie
+    genre: params.get("genre") ?? "",
+    decade: params.get("decade") ?? "",
+    rating: params.get("rating") ?? "",
+    tag: params.get("tag") ?? "", // anime and audiobooks: Isekai, Shounen… / Space Opera, LitRPG…
+  };
+  const set = (key: keyof typeof f, value: string) => {
+    const next = new URLSearchParams(params);
+    if (!value || value === "all") next.delete(key);
+    else next.set(key, value);
+    setParams(next, { replace: true });
+  };
+  const { data, isLoading } = useQuery({ queryKey: ["library", section], queryFn: () => api.library(section) });
+  const all = data ?? [];
+
+  // Options come from what's actually in this section.
+  const genres = [...new Set(all.flatMap((i) => i.media.genres))].sort();
+  const decades = [
+    ...new Set(
+      all
+        .map((i) => i.media.year)
+        .filter(Boolean)
+        .map((y) => Math.floor((y as number) / 10) * 10),
+    ),
+  ].sort((a, b) => b - a);
+  // Tags by how many titles have them, most common first: the useful ones (Isekai, Shounen) lead.
+  const tagCounts = new Map<string, number>();
+  for (const i of all) for (const t of i.media.extra.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const tags = [...tagCounts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+  // Only minimums that at least one title here reaches.
+  const ratings = ratingSteps(section).filter((r) => all.some((i) => (i.media.extra.rating ?? 0) >= r));
+
+  const items = all.filter(
+    ({ media, state }) =>
+      (f.status === "all" || state.status === f.status) &&
+      (f.type === "all" || media.kind === f.type) &&
+      (!f.genre || media.genres.includes(f.genre)) &&
+      (!f.decade || (media.year != null && Math.floor(media.year / 10) * 10 === Number(f.decade))) &&
+      (!f.rating || (media.extra.rating ?? 0) >= Number(f.rating)) &&
+      (!f.tag || (media.extra.tags ?? []).includes(f.tag)),
+  );
+  const filtered = Boolean(f.genre || f.decade || f.rating || f.tag || f.type !== "all" || f.status !== "all");
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{kindLabel[kind]}</h1>
-          <p className="text-sm text-muted-foreground">{data ? `${data.length} tracked` : " "}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{title[section]}</h1>
+          <p className="text-sm text-muted-foreground">
+            {data ? (filtered ? `${items.length} of ${all.length} tracked` : `${all.length} tracked`) : " "}
+          </p>
         </div>
-        {statuses[kind].length > 1 && (
-          <Tabs value={status} onValueChange={setStatus}>
+        <div className="flex flex-wrap gap-2">
+          {section === "anime" && (
+            <Tabs value={f.type} onValueChange={(v) => set("type", v)}>
+              <TabsList>
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="show">Shows</TabsTrigger>
+                <TabsTrigger value="movie">Movies</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+          <Tabs value={f.status} onValueChange={(v) => set("status", v)}>
             <TabsList>
               <TabsTrigger value="all">All</TabsTrigger>
-              {statuses[kind].map((s) => (
+              {statuses[section].map((s) => (
                 <TabsTrigger key={s} value={s}>
                   {statusLabel[s]}
                 </TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
-        )}
+        </div>
       </div>
 
-      {!isLoading && items.length === 0 && (
+      {all.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter label="Genre" value={f.genre} onChange={(v) => set("genre", v)}>
+            {genres.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </Filter>
+          <Filter label="Year" value={f.decade} onChange={(v) => set("decade", v)}>
+            {decades.map((d) => (
+              <option key={d} value={d}>
+                {d}s
+              </option>
+            ))}
+          </Filter>
+          {ratings.length > 0 && (
+            <Filter label="Rating" value={f.rating} onChange={(v) => set("rating", v)}>
+              {ratings.map((r) => (
+                <option key={r} value={r}>
+                  {r}+ {ratingSource[section]}
+                </option>
+              ))}
+            </Filter>
+          )}
+          {tags.length > 0 && (
+            <Filter label="Tag" value={f.tag} onChange={(v) => set("tag", v)}>
+              {tags.map((t) => (
+                <option key={t} value={t}>
+                  {t} ({tagCounts.get(t)})
+                </option>
+              ))}
+            </Filter>
+          )}
+          {filtered && (
+            <button
+              type="button"
+              onClick={() => setParams({}, { replace: true })}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" /> Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {!isLoading && all.length === 0 && (
         <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
           Nothing here yet. Use the search bar to find something, then track it.{" "}
           <Link to="/search" className="text-primary underline-offset-4 hover:underline">
             Search
           </Link>
         </div>
+      )}
+      {!isLoading && all.length > 0 && items.length === 0 && (
+        <p className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+          Nothing matches these filters.
+        </p>
       )}
 
       <PosterGrid>
@@ -64,6 +178,34 @@ export function Library({ kind }: { kind: MediaKind }) {
         ))}
       </PosterGrid>
     </div>
+  );
+}
+
+/** A compact native select: "Genre: Any". */
+function Filter({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-transparent font-medium outline-none [&>option]:bg-card"
+        aria-label={label}
+      >
+        <option value="">Any</option>
+        {children}
+      </select>
+    </label>
   );
 }
 

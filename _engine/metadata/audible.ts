@@ -28,7 +28,9 @@ const domains: Record<string, string> = {
   in: "audible.in",
   jp: "audible.co.jp",
 };
-const groups = "contributors,media,product_attrs,product_desc,series,category_ladders";
+const groups = "contributors,media,product_attrs,product_desc,series,category_ladders,rating";
+/** Bumped when details gain fields; rows cached with an older version are fetched again (library.ts). */
+export const META_VERSION = 3;
 
 // biome-ignore lint/suspicious/noExplicitAny: Audible responses are loosely typed JSON
 type Json = any;
@@ -132,14 +134,20 @@ export function audibleProvider(
     const series = (p.series as Json[] | undefined)?.[0];
     return {
       ...toResult(p),
-      genres: [...new Set((p.category_ladders as Json[] | undefined)?.map((c) => c.ladder[0]?.name).filter(Boolean))],
+      // Audible's categories nest: "Science Fiction & Fantasy > Science Fiction > Space Opera". The middle
+      // level makes useful genres (the top one is too broad); the deepest level becomes tags.
+      genres: ladderNames(p, 1),
       extra: {
+        tags: ladderNames(p, 2),
         authors: names(p.authors),
         narrators: names(p.narrators),
         publisher: p.publisher_name ?? null,
         runtimeMin: p.runtime_length_min ?? null,
         series: series ? { name: series.title, position: series.sequence ?? null } : null,
         releaseDate: p.release_date ?? null,
+        language: p.language ?? null,
+        rating: Number(p.rating?.overall_distribution?.display_average_rating) || null, // out of 5
+        metaVersion: META_VERSION,
       },
     };
   }
@@ -172,6 +180,20 @@ export function audibleProvider(
       return asins.length ? makeKey("audible", "audiobook", asins.join("+")) : null;
     },
 
+    /** Books by an author not out yet (Audible lists pre-orders with their release date), in one language. */
+    async upcoming(author, language) {
+      const today = new Date().toISOString().slice(0, 10);
+      const data = await get("", { author, products_sort_by: "-ReleaseDate", num_results: "20" });
+      return (data.products as Json[])
+        .filter((p) => p.release_date && p.release_date > today)
+        .filter((p) => !language || !p.language || p.language === language)
+        .map((p) => ({
+          ...toResult(p),
+          releaseDate: p.release_date as string,
+          series: (p.series as Json[])?.[0]?.title ?? null,
+        }));
+    },
+
     async details(key): Promise<MediaInfo> {
       const asins = parseKey(key).id.split("+");
       if (asins.length === 1) return product(asins[0]);
@@ -187,6 +209,7 @@ export function audibleProvider(
         extra: {
           ...first.extra,
           narrators: [...new Set(parts.flatMap((p) => p.extra.narrators as string[]))],
+          tags: [...new Set(parts.flatMap((p) => (p.extra.tags as string[]) ?? []))],
           runtimeMin: sum || null,
           parts: parts.length,
         },
@@ -196,6 +219,17 @@ export function audibleProvider(
 }
 
 const names = (people: Json[] | undefined): string[] => (people ?? []).map((x) => x.name);
+
+/** Category names at one depth of Audible's ladders (falling back to the deepest level a ladder has). */
+function ladderNames(p: Json, depth: number): string[] {
+  const out = new Set<string>();
+  for (const c of (p.category_ladders as Json[] | undefined) ?? []) {
+    const ladder = c.ladder as Json[];
+    const name = (ladder[depth] ?? (depth === 1 ? ladder.at(-1) : undefined))?.name;
+    if (name) out.add(name);
+  }
+  return [...out];
+}
 
 function stripHtml(html: string | undefined | null) {
   if (!html) return null;
