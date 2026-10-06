@@ -1,8 +1,17 @@
 // Nuvio: reads watched items and resume positions from a Nuvio Sync account. Nuvio's backend is
 // Supabase-based; the official one is api.nuvio.tv and self-hosted ones work the same way. Each server
 // publishes its public client key at /.well-known/nuvio, so the user only needs the address.
-// Only read RPCs are called (sync_pull_*); nothing is ever written back.
-import { definePlugin, getJson, type Manifest, msToIso, type PluginEvent, UserError } from "../_sdk/index.ts";
+// Reads with the sync_pull_* RPCs. For connections kept in sync it also marks and unmarks watched
+// items (sync_push_watched_items, sync_delete_watched_items); every other RPC is refused in code.
+import {
+  definePlugin,
+  getJson,
+  type Manifest,
+  msToIso,
+  type PluginEvent,
+  type PushItem,
+  UserError,
+} from "../_sdk/index.ts";
 
 export const manifest: Manifest = {
   contract: 1,
@@ -33,6 +42,7 @@ export const manifest: Manifest = {
     ],
   },
   sync: { intervalSeconds: 300 },
+  capabilities: { write: true },
 };
 
 type Creds = {
@@ -99,8 +109,15 @@ async function auth(server: string, key: string, grant: "password" | "refresh_to
   }
 }
 
-async function rpc<T>(c: Creds, name: string, params: object): Promise<T> {
-  if (!READ_RPCS.has(name)) throw new Error(`Nuvio plugin is read-only: refused ${name}`);
+// Used only by push(), for connections the user set to keep Nuvio in sync.
+const WRITE_RPCS = new Set(["sync_push_watched_items", "sync_delete_watched_items"]);
+
+export function assertRpcAllowed(name: string, write = false) {
+  if (!READ_RPCS.has(name) && !(write && WRITE_RPCS.has(name))) throw new Error(`Nuvio plugin refused ${name}`);
+}
+
+async function rpc<T>(c: Creds, name: string, params: object, write = false): Promise<T> {
+  assertRpcAllowed(name, write);
   return getJson<T>(`${c.server}/rest/v1/rpc/${name}`, {
     method: "POST",
     headers: { "content-type": "application/json", apikey: c.key, Authorization: `Bearer ${c.accessToken}` },
@@ -136,18 +153,7 @@ export default definePlugin<Creds>({
       progressSince: saved.progressSince ?? 0,
       watchedKeys: saved.watchedKeys,
     };
-    let c = creds;
-    let refreshed = false;
-    if (Date.now() > c.expiresAt - 60_000) {
-      const s = await auth(c.server, c.key, "refresh_token", { refresh_token: c.refreshToken });
-      c = {
-        ...c,
-        accessToken: s.access_token,
-        refreshToken: s.refresh_token,
-        expiresAt: Date.now() + s.expires_in * 1000,
-      };
-      refreshed = true;
-    }
+    const { c, refreshed } = await fresh(creds);
 
     // The whole watched list every time (a few pages): comparing it with last time is the only way
     // to see unmarks, because Nuvio deletes the row instead of flagging it.
@@ -175,7 +181,58 @@ export default definePlugin<Creds>({
     };
     return { events, cursor: next, credentials: refreshed ? c : undefined };
   },
+
+  /**
+   * Marks with sync_push_watched_items and unmarks with sync_delete_watched_items: the same rows the
+   * Nuvio apps write (content id = IMDb id, plus season/episode for episodes), labelled with origin
+   * "mediatrove". Titles without an IMDb id can't be named in Nuvio and are reported as not found.
+   */
+  async push(creds, items) {
+    const { c, refreshed } = await fresh(creds);
+    const named = items.map((it) => (it.media.imdb ? it : null));
+    const row = (it: PushItem) => ({
+      content_id: it.media.imdb,
+      content_type: it.media.kind === "show" ? "series" : "movie",
+      season: it.media.kind === "show" ? (it.season ?? null) : null,
+      episode: it.media.kind === "show" ? (it.episode ?? null) : null,
+    });
+    const marks = named.filter((it): it is PushItem => it?.action === "watched");
+    const unmarks = named.filter((it): it is PushItem => it?.action === "unwatched");
+    const base = { p_profile_id: c.profile, p_origin_client_id: "mediatrove" };
+    if (marks.length) {
+      const p_items = marks.map((it) => ({
+        ...row(it),
+        title: it.media.title ?? "",
+        watched_at: Date.parse(it.occurredAt),
+      }));
+      await rpc(c, "sync_push_watched_items", { ...base, p_items }, true);
+    }
+    if (unmarks.length) {
+      const p_keys = unmarks.map((it) => {
+        const { content_id, season, episode } = row(it);
+        return { content_id, season, episode };
+      });
+      await rpc(c, "sync_delete_watched_items", { ...base, p_keys }, true);
+    }
+    return {
+      results: named.map((it) => (it ? { ok: true } : { ok: false, notFound: true })),
+      credentials: refreshed ? c : undefined,
+    };
+  },
 });
+
+/** The session, refreshed when it's within a minute of expiring. */
+async function fresh(creds: Creds) {
+  if (Date.now() <= creds.expiresAt - 60_000) return { c: creds, refreshed: false };
+  const s = await auth(creds.server, creds.key, "refresh_token", { refresh_token: creds.refreshToken });
+  const c: Creds = {
+    ...creds,
+    accessToken: s.access_token,
+    refreshToken: s.refresh_token,
+    expiresAt: Date.now() + s.expires_in * 1000,
+  };
+  return { c, refreshed: true };
+}
 
 const keyOf = (w: Pick<WatchedItem, "content_type" | "content_id" | "season" | "episode">) =>
   [w.content_type, w.content_id, w.season ?? "", w.episode ?? ""].join("|");

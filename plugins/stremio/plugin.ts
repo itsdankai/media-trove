@@ -2,8 +2,8 @@
 // Movies: times watched + resume position. Shows: the "watched" bitfield (one bit per episode)
 // decoded against Cinemeta's episode list, plus the resume position of the last episode played.
 // The API is undocumented, so if Stremio changes it, only this plugin breaks.
-import { inflateSync } from "node:zlib";
-import { definePlugin, getJson, type Manifest, type PluginEvent, UserError } from "../_sdk/index.ts";
+import { deflateSync, inflateSync } from "node:zlib";
+import { definePlugin, getJson, type Manifest, type PluginEvent, type PushItem, UserError } from "../_sdk/index.ts";
 
 export const manifest: Manifest = {
   contract: 1,
@@ -27,6 +27,7 @@ export const manifest: Manifest = {
     note: "Facebook/Apple sign-in accounts need a Stremio password first (stremio.com → account settings).",
   },
   sync: { intervalSeconds: 300 },
+  capabilities: { write: true },
 };
 
 const API = "https://api.strem.io/api";
@@ -105,6 +106,22 @@ export function decodeWatched(serialized: string, videoIds: string[]): string[] 
   return videoIds.filter((_, i) => bit(i + offset));
 }
 
+/**
+ * The reverse of decodeWatched, as Stremio's apps write it (stremio-watched-bitfield, MIT): one bit
+ * per video in Stremio's order, zlib level 6, base64, anchored on the last watched video.
+ */
+export function encodeWatched(watched: Set<string>, videoIds: string[]): string {
+  const bytes = Buffer.alloc(Math.ceil(videoIds.length / 8));
+  let last = -1;
+  videoIds.forEach((id, i) => {
+    if (!watched.has(id)) return;
+    bytes[i >> 3] |= 1 << (i % 8);
+    last = i;
+  });
+  const anchor = Math.max(last, 0);
+  return `${videoIds[anchor] ?? "undefined"}:${anchor + 1}:${deflateSync(bytes, { level: 6 }).toString("base64")}`;
+}
+
 export const hasActivity = (i: LibraryItem) =>
   Boolean(i.state.timesWatched || i.state.flaggedWatched || i.state.timeOffset || i.state.watched);
 
@@ -162,7 +179,76 @@ export default definePlugin<Creds>({
     cursor.since = todo.slice(0, done).reduce((m, i) => (i._mtime > m ? i._mtime : m), cursor.since);
     return { events, cursor, more: done < todo.length };
   },
+
+  push: (creds, items) => pushToStremio(creds, items),
 });
+
+/**
+ * Marks movies and episodes watched/unwatched the way Stremio's own apps do (stremio-core's
+ * mark_as_watched and mark_video_as_watched), saved with datastorePut. Only titles already in the
+ * account's datastore are changed: Stremio keeps an entry for everything ever played or added, and
+ * not creating new entries means MediaTrove can't write one Stremio wouldn't accept. Anything else
+ * is reported as not found.
+ */
+export async function pushToStremio(creds: Creds, items: PushItem[], fetchVideos = cinemetaVideos) {
+  const ids = [...new Set(items.map((i) => i.media.imdb).filter(Boolean))] as string[];
+  const stored = ids.length
+    ? await call<LibraryItem[]>("datastoreGet", { authKey: creds.authKey, collection: "libraryItem", ids, all: false })
+    : [];
+  const byId = new Map(stored.map((i) => [i._id, structuredClone(i)]));
+  const changed = new Set<string>();
+  const now = new Date().toISOString();
+
+  const results = [];
+  for (const it of items) {
+    try {
+      const item = it.media.imdb ? byId.get(it.media.imdb) : undefined;
+      if (!item) {
+        results.push({ ok: false, notFound: true });
+        continue;
+      }
+      const s = item.state;
+      if (it.media.kind === "movie") {
+        if (it.action === "watched" && !(s.timesWatched > 0 || s.flaggedWatched > 0)) {
+          s.timesWatched += 1;
+          s.lastWatched = it.occurredAt;
+          s.timeOffset = 0;
+        } else if (it.action === "unwatched") {
+          s.timesWatched = 0;
+          s.flaggedWatched = 0;
+        }
+      } else {
+        const videoIds = orderVideos(await fetchVideos(item._id));
+        const videoId = `${item._id}:${it.season}:${it.episode}`;
+        if (!videoIds.includes(videoId)) {
+          results.push({ ok: false, notFound: true });
+          continue;
+        }
+        const current = s.watched ? decodeWatched(s.watched, videoIds) : [];
+        // Unreadable (the episode list changed under it): rewriting it could wipe other marks.
+        if (!current) throw new Error("Stremio's watched list for this show couldn't be read");
+        const set = new Set(current);
+        if (it.action === "watched") set.add(videoId);
+        else set.delete(videoId);
+        s.watched = encodeWatched(set, videoIds);
+        if (it.action === "watched" && (!s.lastWatched || s.lastWatched < it.occurredAt)) s.lastWatched = it.occurredAt;
+      }
+      item._mtime = now;
+      changed.add(item._id);
+      results.push({ ok: true });
+    } catch (e) {
+      results.push({ ok: false, error: (e as Error).message });
+    }
+  }
+  if (changed.size) {
+    await call("datastorePut", {
+      authKey: creds.authKey,
+      collection: "libraryItem",
+      changes: [...changed].map((id) => byId.get(id)),
+    });
+  }
+  return { results };
+}
 
 /**
  * Works through items a few at a time, stopping after a time budget so one sync never runs

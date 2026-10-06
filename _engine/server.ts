@@ -12,6 +12,7 @@ import { tmdbProvider } from "./metadata/tmdb.ts";
 import { appDist, dataDir, dbPath, ensureDataDir, projectRoot } from "./paths.ts";
 import { ProcessHost } from "./plugins/host.ts";
 import { createSync } from "./sync.ts";
+import { createWriteback } from "./writeback.ts";
 
 ensureDataDir();
 const db = openDb(dbPath);
@@ -26,11 +27,17 @@ const host = new ProcessHost(projectRoot, {
   customUrls: (process.env.MEDIATROVE_PLUGIN_URLS ?? "").split(",").filter(Boolean),
 });
 const artworkDir = join(dataDir, "artwork");
-const sync = createSync(db, createLibrary(db, providers, { artworkDir }), host, loadKey(dataDir));
+const key = loadKey(dataDir);
+const lib = createLibrary(db, providers, { artworkDir });
+const writeback = createWriteback(db, lib, host, key);
+// Pull first, then push: after each complete sync, connections kept in sync get MediaTrove's changes.
+const sync = createSync(db, lib, host, key, {
+  afterSync: (id) => void writeback.push(id).catch((e) => console.error("push:", e)),
+});
 const stopSchedule = sync.schedule();
 
 const app = new Hono()
-  .route("/", createApp(db, providers, { host, sync }, { artworkDir, dataDir }))
+  .route("/", createApp(db, providers, { host, sync, writeback }, { artworkDir, dataDir }))
   .use("/*", serveStatic({ root }))
   // Client-side routes (/shows, /media/…) all load the same page.
   .get("*", (c) => {

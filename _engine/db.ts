@@ -50,6 +50,24 @@ export const connections = sqliteTable("connections", {
   lastSummary: text("last_summary"),
   followUnmarks: integer("follow_unmarks", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at").notNull(),
+  // Keeping the app in sync (writeback.ts): off | add | full. Connections from before phase 6 stay off.
+  syncMode: text("sync_mode").notNull().default("off"),
+  syncModeSince: integer("sync_mode_since"), // when it was last turned on; Full only sends unmarks made after this
+  lastPushAt: integer("last_push_at"), // events stored after this still need checking
+  lastPushSummary: text("last_push_summary"),
+});
+
+// What MediaTrove last sent to a connection's app, per movie or episode (season/episode -1 for movies).
+// Counts as the app's state until the app reports something newer, so nothing is sent twice.
+export const pushes = sqliteTable("pushes", {
+  connectionId: text("connection_id").notNull(),
+  mediaKey: text("media_key").notNull(),
+  season: integer("season").notNull(),
+  episode: integer("episode").notNull(),
+  action: text("action").notNull(), // watched | unwatched
+  at: text("at").notNull(), // the MediaTrove action's time (ISO)
+  status: text("status").notNull(), // ok | not_found | skipped (turned on "from now on": the past is never sent)
+  pushedAt: integer("pushed_at").notNull(),
 });
 
 // Remembers how an outside id (imdb:tt0133093, asin:B0…) maps to a media key, so each is looked up once.
@@ -79,6 +97,10 @@ export const imports = sqliteTable("imports", {
 });
 
 const ddl = `
+CREATE TABLE IF NOT EXISTS pushes (
+  connection_id TEXT NOT NULL, media_key TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
+  action TEXT NOT NULL, at TEXT NOT NULL, status TEXT NOT NULL, pushed_at INTEGER NOT NULL,
+  PRIMARY KEY (connection_id, media_key, season, episode));
 CREATE TABLE IF NOT EXISTS imports (
   id TEXT PRIMARY KEY, source TEXT NOT NULL, label TEXT NOT NULL, started_at INTEGER NOT NULL,
   finished_at INTEGER NOT NULL, summary TEXT NOT NULL, error TEXT);
@@ -110,6 +132,12 @@ export function openDb(file: string) {
     (sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
   if (!has("connections", "follow_unmarks")) {
     sqlite.exec("ALTER TABLE connections ADD COLUMN follow_unmarks INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!has("connections", "sync_mode")) {
+    sqlite.exec(`ALTER TABLE connections ADD COLUMN sync_mode TEXT NOT NULL DEFAULT 'off';
+      ALTER TABLE connections ADD COLUMN sync_mode_since INTEGER;
+      ALTER TABLE connections ADD COLUMN last_push_at INTEGER;
+      ALTER TABLE connections ADD COLUMN last_push_summary TEXT;`);
   }
   return drizzle(sqlite);
 }

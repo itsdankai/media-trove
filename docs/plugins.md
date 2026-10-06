@@ -1,12 +1,14 @@
 # Writing a MediaTrove plugin
 
 A plugin connects MediaTrove to one outside service, such as a media player, a server or a tracker.
-It's a small HTTP service with three routes. MediaTrove calls it. The plugin never calls MediaTrove.
+It's a small HTTP service with three routes, plus an optional fourth. MediaTrove calls it. The plugin
+never calls MediaTrove.
 
 ```
 GET  /manifest.json   who you are, and the fields your connect form needs
 POST /connect         { fields }               -> { account, credentials }
 POST /sync            { credentials, cursor }  -> { events, cursor, credentials? }
+POST /push            { credentials, items }   -> { results }   optional: keep the app in sync
 ```
 
 **Plugins are stateless.** MediaTrove stores the `credentials` you return (encrypted) and the
@@ -15,7 +17,7 @@ user typed. Return the password-free tokens and let the password go.
 
 **Plugins only report what happened.** MediaTrove applies the sync rules: episodes from every source
 are combined; the latest progress wins; reaching the user's watched threshold marks something watched;
-and only the user can unmark. Don't try to apply those rules yourself.
+and the latest action wins, including unmarks. Don't try to apply those rules yourself.
 
 ## The manifest
 
@@ -65,6 +67,49 @@ from this list.
   reports from different apps.
 - Sending the same event twice is harmless: MediaTrove recognises it and stores it once. Still, use the
   cursor so you don't resend your whole history every sync.
+
+## Keeping the app in sync (optional)
+
+A plugin that can also change its app, marking things watched there, says so in its manifest:
+
+```json
+{ "capabilities": { "write": true } }
+```
+
+and serves one more route:
+
+```
+POST /push   { credentials, items }   -> { results, credentials? }
+```
+
+```json
+{
+  "items": [
+    { "media": { "kind": "movie", "tmdb": 603, "imdb": "tt0133093", "title": "The Matrix", "year": 1999 },
+      "action": "watched", "occurredAt": "2026-10-06T07:19:15.000Z" },
+    { "media": { "kind": "show", "tmdb": 95396, "imdb": "tt11280740", "tvdb": 371980, "title": "Severance" },
+      "action": "unwatched", "season": 1, "episode": 3, "occurredAt": "2026-10-06T08:00:00.000Z" }
+  ]
+}
+```
+
+Reply with one result per item, in the same order: `{ "ok": true }`, `{ "ok": false, "notFound": true }`
+when the app doesn't have that title, or `{ "ok": false, "error": "…" }` for anything else (it's retried later).
+
+MediaTrove decides what to send; the plugin only carries it out. MediaTrove calls `/push` only for
+connections the user set to keep in sync, chosen when connecting:
+
+- **Off:** never.
+- **Add only** (the default): only `watched`. Nothing in the app is ever unmarked.
+- **Full:** `unwatched` too, but only for unmarks made after the user chose Full.
+
+The app's own marks always come in first: MediaTrove pushes only after a complete sync, and only when
+its latest action on that movie or episode is newer than the app's. When the app reports a pushed mark
+back on its next sync, MediaTrove counts it as the same viewing, not a second one.
+
+Use `occurredAt` as the watched date where the app keeps one. Only make the requests a push needs:
+the bundled media-server plugins check every request against an allowlist, and the only writes they
+allow are "mark played" and "mark unplayed".
 
 ## Errors
 

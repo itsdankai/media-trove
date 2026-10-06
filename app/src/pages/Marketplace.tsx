@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Clapperboard, Headphones, Link2, Plug, Search, Tv } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { SyncModePicker } from "@/components/SyncModePicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api, type CatalogEntry, kindLabel } from "@/lib/api";
+import { api, type CatalogEntry, kindLabel, type SyncMode } from "@/lib/api";
 
 const kindIcon = { movie: Clapperboard, show: Tv, audiobook: Headphones };
 
@@ -21,8 +22,8 @@ export function Marketplace() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
         <p className="text-sm text-muted-foreground">
-          Connect the apps you watch and listen in. MediaTrove only reads your activity and never changes anything
-          there.
+          Connect the apps you watch and listen in. MediaTrove reads your activity there. For apps that support it, you
+          can also choose to keep them in sync with MediaTrove.
         </p>
       </div>
 
@@ -87,12 +88,14 @@ function ConnectDialog({ plugin, onClose }: { plugin: CatalogEntry; onClose: () 
     isLoading,
   } = useQuery({ queryKey: ["manifest", plugin.id], queryFn: () => api.manifest(plugin.id) });
   const [values, setValues] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState<SyncMode>("add");
+  const canWrite = Boolean(manifest?.capabilities?.write);
   const connect = useMutation({
     mutationFn: () => {
       const fields = Object.fromEntries(
         manifest?.connect.fields.map((f) => [f.key, values[f.key] ?? f.default ?? ""]) ?? [],
       );
-      return api.connect(plugin.id, fields);
+      return api.connect(plugin.id, fields, canWrite ? mode : "off");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["marketplace"] });
@@ -144,6 +147,17 @@ function ConnectDialog({ plugin, onClose }: { plugin: CatalogEntry; onClose: () 
                   {f.help && <p className="text-xs text-muted-foreground">{f.help}</p>}
                 </div>
               ))}
+              {canWrite && (
+                <div className="space-y-1.5">
+                  <SyncModePicker app={plugin.name} value={mode} onChange={setMode} stacked />
+                  {mode !== "off" && (
+                    <p className="text-xs text-muted-foreground">
+                      What's already marked in {plugin.name} comes into MediaTrove first. Then MediaTrove's marks are
+                      added there. You can change this any time in Settings.
+                    </p>
+                  )}
+                </div>
+              )}
               {connect.error && <p className="text-sm text-destructive">{connect.error.message}</p>}
               <Button type="submit" className="w-full" disabled={connect.isPending}>
                 {connect.isPending ? "Connecting…" : "Connect"}

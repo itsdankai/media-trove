@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { assertReadOnly as mbReadOnly, refFrom } from "./_mediabrowser/client.ts";
+import { assertAllowed as mbAllowed, refFrom } from "./_mediabrowser/client.ts";
 import { assertReadOnly as kodiReadOnly, refFromKodi } from "./kodi/plugin.ts";
 import { assertReadOnly as plexReadOnly, refFromGuids } from "./plex/plugin.ts";
 
-describe("media-server plugins are read-only", () => {
-  it("Jellyfin/Emby", () => {
-    expect(() => mbReadOnly("GET", "/Users/abc/Items")).not.toThrow();
-    expect(() => mbReadOnly("POST", "/Users/abc/PlayedItems/123")).toThrow(/read-only/);
-    expect(() => mbReadOnly("DELETE", "/Users/abc/PlayedItems/123")).toThrow(/read-only/);
-    expect(() => mbReadOnly("DELETE", "/Items/123")).toThrow(/read-only/);
+describe("media-server plugins only make the requests they are allowed", () => {
+  it("Jellyfin/Emby: reads only, unless pushing; even then only played/unplayed", () => {
+    expect(() => mbAllowed("GET", "/Users/abc/Items")).not.toThrow();
+    expect(() => mbAllowed("POST", "/Users/abc/PlayedItems/123")).toThrow(/refused/);
+    expect(() => mbAllowed("DELETE", "/Users/abc/PlayedItems/123")).toThrow(/refused/);
+    expect(() => mbAllowed("POST", "/Users/abc/PlayedItems/123", true)).not.toThrow();
+    expect(() => mbAllowed("DELETE", "/Users/abc/PlayedItems/123", true)).not.toThrow();
+    expect(() => mbAllowed("DELETE", "/Items/123", true)).toThrow(/refused/);
+    expect(() => mbAllowed("POST", "/Items/123", true)).toThrow(/refused/);
   });
   it("Plex", () => {
     expect(() => plexReadOnly("GET", "/library/sections/2/all")).not.toThrow();

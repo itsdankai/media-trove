@@ -5,25 +5,36 @@ import { randomUUID } from "node:crypto";
 import { eq, like } from "drizzle-orm";
 import type { ConnectResult, PluginEvent, SyncResult } from "../plugins/_sdk/index.ts";
 import { decrypt, encrypt } from "./crypto.ts";
-import { type ConnectionRow, connections, type Db, events, idMap } from "./db.ts";
+import { type ConnectionRow, connections, type Db, events, idMap, pushes } from "./db.ts";
 import { appendEvents, type NewEvent } from "./events.ts";
 import type { Library } from "./library.ts";
 import type { PluginHost } from "./plugins/host.ts";
 
 export type SyncSummary = { received: number; added: number; unmatched: number; refused: number; at: number };
 
-export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) {
+export function createSync(
+  db: Db,
+  lib: Library,
+  host: PluginHost,
+  key: Buffer,
+  opts: { afterSync?: (connectionId: string) => void } = {},
+) {
   const running = new Map<string, Promise<SyncSummary>>();
 
-  async function connect(pluginId: string, fields: Record<string, string>) {
+  /** mode: keep the app in sync (writeback.ts); only for plugins that can write, else off. */
+  async function connect(pluginId: string, fields: Record<string, string>, mode: "off" | "add" | "full" = "off") {
+    const canWrite = Boolean((await host.manifest(pluginId)).capabilities?.write);
     const r = await host.call<ConnectResult>(pluginId, "/connect", { fields });
+    const now = Date.now();
     const row = {
       id: randomUUID(),
       pluginId,
       accountName: r.account.name,
       credentials: encrypt(key, r.credentials),
       cursor: null,
-      createdAt: Date.now(),
+      createdAt: now,
+      syncMode: canWrite ? mode : "off",
+      syncModeSince: canWrite && mode !== "off" ? now : null,
     };
     db.insert(connections).values(row).run();
     return row;
@@ -47,6 +58,7 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
     try {
       // A plugin with a big backlog answers `more: true`; keep going, saving after every round so
       // a crash or restart resumes where it stopped.
+      let complete = false;
       for (let round = 0; round < MAX_ROUNDS; round++) {
         const conn = get(id);
         if (!conn) throw new Error("connection not found");
@@ -71,8 +83,13 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
           })
           .where(eq(connections.id, id))
           .run();
-        if (!res.more) break;
+        if (!res.more) {
+          complete = true;
+          break;
+        }
       }
+      // Pull first, then push: the app's own marks are in before anything is sent to it.
+      if (complete) opts.afterSync?.(id);
       return summary;
     } catch (e) {
       db.update(connections)
@@ -131,6 +148,7 @@ export function createSync(db: Db, lib: Library, host: PluginHost, key: Buffer) 
 
   function remove(id: string) {
     db.delete(connections).where(eq(connections.id, id)).run();
+    db.delete(pushes).where(eq(pushes.connectionId, id)).run();
   }
 
   /**

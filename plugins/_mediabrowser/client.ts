@@ -1,7 +1,8 @@
 // Shared by the Jellyfin and Emby plugins: both speak the "MediaBrowser" API (Jellyfin is an Emby fork).
-// Read-only by construction: request() refuses anything outside READ_ONLY before any network call.
+// Every request is checked against an allowlist before any network call: reads in READ_ONLY, and the
+// only writes are marking an item played or unplayed (WRITES), used by push() alone.
 import { randomUUID } from "node:crypto";
-import { getJson, type Manifest, type MediaRef, UserError } from "../_sdk/index.ts";
+import { getJson, type Manifest, type MediaRef, type PushItem, UserError } from "../_sdk/index.ts";
 import { diffSnapshot, type Entry, type SnapshotCursor } from "../_sdk/snapshot.ts";
 
 export type Creds = { server: string; token: string; userId: string; deviceId: string };
@@ -9,12 +10,19 @@ export type Creds = { server: string; token: string; userId: string; deviceId: s
 const READ_ONLY: [string, RegExp][] = [
   ["POST", /^\/Users\/AuthenticateByName$/],
   ["GET", /^\/Users\/[\w-]+\/Items$/],
+  ["GET", /^\/Shows\/[\w-]+\/Episodes$/],
   ["GET", /^\/System\/Info\/Public$/],
 ];
 
-export function assertReadOnly(method: string, path: string) {
-  if (!READ_ONLY.some(([m, re]) => m === method && re.test(path))) {
-    throw new Error(`Media server plugin is read-only: refused ${method} ${path}`);
+const WRITES: [string, RegExp][] = [
+  ["POST", /^\/Users\/[\w-]+\/PlayedItems\/[\w-]+$/],
+  ["DELETE", /^\/Users\/[\w-]+\/PlayedItems\/[\w-]+$/],
+];
+
+export function assertAllowed(method: string, path: string, write = false) {
+  const ok = (list: [string, RegExp][]) => list.some(([m, re]) => m === method && re.test(path));
+  if (!ok(READ_ONLY) && !(write && ok(WRITES))) {
+    throw new Error(`Media server plugin refused ${method} ${path}`);
   }
 }
 
@@ -27,8 +35,9 @@ async function request<T>(
   path: string,
   query: Record<string, string> = {},
   body?: object,
+  write = false,
 ): Promise<T> {
-  assertReadOnly(method, path);
+  assertAllowed(method, path, write);
   const auth = authHeader(c.deviceId, c.token);
   const qs = new URLSearchParams(query).toString();
   return getJson<T>(
@@ -48,8 +57,10 @@ async function request<T>(
   );
 }
 
-export function manifestFor(id: "jellyfin" | "emby", name: string, homepage: string): Manifest {
+/** write: the plugin can mark items played/unplayed (Jellyfin yes; Emby waits until it's tested). */
+export function manifestFor(id: "jellyfin" | "emby", name: string, homepage: string, write = false): Manifest {
   return {
+    ...(write ? { capabilities: { write: true } } : {}),
     contract: 1,
     id,
     name,
@@ -74,7 +85,9 @@ export function manifestFor(id: "jellyfin" | "emby", name: string, homepage: str
           help: "Used once to sign in. Not stored. Leave empty if your user has no password.",
         },
       ],
-      note: "MediaTrove only reads what you've watched. It never changes anything on your server.",
+      note: write
+        ? `MediaTrove reads what you've watched. If you choose to keep ${name} in sync, it also marks things watched on your server, and nothing else.`
+        : "MediaTrove only reads what you've watched. It never changes anything on your server.",
     },
     sync: { intervalSeconds: 180 }, // servers on your own network: cheap to ask often
   };
@@ -183,6 +196,70 @@ export async function sync(c: Creds, cursor: SnapshotCursor) {
     }
   }
   return diffSnapshot(entries, cursor);
+}
+
+/**
+ * Marks items played or unplayed. The server's own id filters can't look titles up (Jellyfin ignores
+ * AnyProviderIdEquals), so the library's movies and series are listed once and matched here by
+ * TMDB, IMDb, then TVDB id, with title and year as the last resort.
+ */
+export async function push(c: Creds, items: PushItem[]) {
+  const library = await allItems(c, { IncludeItemTypes: "Movie,Series" });
+  const index = new Map<string, Item>();
+  for (const i of library) {
+    const kind = i.Type === "Movie" ? "movie" : "show";
+    const r = refFrom(kind, i);
+    for (const k of [r.tmdb && `tmdb:${r.tmdb}`, r.imdb && `imdb:${r.imdb}`, r.tvdb && `tvdb:${r.tvdb}`])
+      if (k) index.set(`${kind}|${k}`, i);
+    index.set(`${kind}|title:${i.Name.toLowerCase()}|${i.ProductionYear ?? ""}`, i);
+  }
+  const find = (m: MediaRef) =>
+    [
+      m.tmdb && `tmdb:${m.tmdb}`,
+      m.imdb && `imdb:${m.imdb}`,
+      m.tvdb && `tvdb:${m.tvdb}`,
+      m.title && `title:${m.title.toLowerCase()}|${m.year ?? ""}`,
+    ]
+      .filter(Boolean)
+      .map((k) => index.get(`${m.kind}|${k}`))
+      .find(Boolean);
+
+  const episodes = new Map<string, Item[]>();
+  async function episodeOf(seriesId: string, season: number, episode: number) {
+    if (!episodes.has(seriesId)) {
+      const r = await request<{ Items: Item[] }>(c, "GET", `/Shows/${seriesId}/Episodes`, {
+        UserId: c.userId,
+        EnableImages: "false",
+      });
+      episodes.set(seriesId, r.Items);
+    }
+    return episodes.get(seriesId)?.find((e) => e.ParentIndexNumber === season && e.IndexNumber === episode);
+  }
+
+  const results = [];
+  for (const it of items) {
+    try {
+      const found = find(it.media);
+      const target =
+        found && it.media.kind === "show" && it.season != null && it.episode != null
+          ? await episodeOf(found.Id, it.season, it.episode)
+          : it.media.kind === "movie"
+            ? found
+            : undefined;
+      if (!target) {
+        results.push({ ok: false, notFound: true });
+        continue;
+      }
+      const path = `/Users/${c.userId}/PlayedItems/${target.Id}`;
+      if (it.action === "watched")
+        await request(c, "POST", path, { DatePlayed: it.occurredAt.replace(/\.\d+Z$/, "Z") }, undefined, true);
+      else await request(c, "DELETE", path, {}, undefined, true);
+      results.push({ ok: true });
+    } catch (e) {
+      results.push({ ok: false, error: (e as Error).message });
+    }
+  }
+  return { results };
 }
 
 async function byIds(c: Creds, ids: string[]) {
