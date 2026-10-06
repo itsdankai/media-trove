@@ -67,9 +67,17 @@ export function Library({ kind }: { kind: MediaKind }) {
   );
 }
 
+/** The line under a poster. The year is always there; what's added depends on the kind. */
 function subline(kind: MediaKind, s: TrackState, subtitle: string | null, year: number | null) {
-  if (kind === "show") return `${s.watchedEpisodes?.length ?? 0} episodes watched`;
-  if (kind === "audiobook")
-    return s.status === "finished" ? subtitle : `${Math.round((s.progress ?? 0) * 100)}% · ${subtitle ?? ""}`;
-  return s.watchCount && s.watchCount > 1 ? `Watched ${s.watchCount}×` : year ? String(year) : null;
+  const parts: (string | number | null)[] = [year];
+  if (kind === "show") {
+    const n = s.watchedEpisodes?.length ?? 0;
+    parts.push(`${n} ${n === 1 ? "episode" : "episodes"}`);
+  } else if (kind === "audiobook") {
+    if (s.status === "listening") parts.unshift(`${Math.round((s.progress ?? 0) * 100)}%`);
+    parts.push(subtitle);
+  } else if (s.watchCount && s.watchCount > 1) {
+    parts.push(`Watched ${s.watchCount}×`);
+  }
+  return parts.filter(Boolean).join(" · ") || null;
 }

@@ -56,6 +56,7 @@ export function createApp(
     lastError: c.lastError,
     lastSummary: c.lastSummary ? JSON.parse(c.lastSummary) : null,
     syncing: plugins?.sync.isRunning(c.id) ?? false,
+    followUnmarks: c.followUnmarks,
     createdAt: c.createdAt,
   });
 
@@ -152,7 +153,8 @@ export function createApp(
           .where(inArray(media.key, keys))
           .all()
           .filter((m) => !kind || m.kind === kind);
-        const items = rows.map((m) => ({ media: m, state: stateOf(m) }));
+        // "planned" = nothing left (e.g. unmarked everywhere). There's no watchlist yet, so it isn't shown.
+        const items = rows.map((m) => ({ media: m, state: stateOf(m) })).filter((i) => i.state.status !== "planned");
         items.sort((a, b) => (b.state.lastActivityAt ?? "").localeCompare(a.state.lastActivityAt ?? ""));
         return c.json(items);
       })
@@ -233,6 +235,15 @@ export function createApp(
         } catch (e) {
           return c.json({ error: (e as Error).message }, 502);
         }
+      })
+
+      .patch("/api/connections/:id", zValidator("json", z.object({ followUnmarks: z.boolean() })), (c) => {
+        needPlugins();
+        db.update(connections)
+          .set({ followUnmarks: c.req.valid("json").followUnmarks })
+          .where(eq(connections.id, c.req.param("id")))
+          .run();
+        return c.json({ ok: true });
       })
 
       .delete("/api/connections/:id", (c) => {

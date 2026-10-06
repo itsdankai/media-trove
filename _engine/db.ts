@@ -48,6 +48,7 @@ export const connections = sqliteTable("connections", {
   lastSyncAt: integer("last_sync_at"),
   lastError: text("last_error"),
   lastSummary: text("last_summary"),
+  followUnmarks: integer("follow_unmarks", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -73,7 +74,8 @@ CREATE TABLE IF NOT EXISTS artwork (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS connections (
   id TEXT PRIMARY KEY, plugin_id TEXT NOT NULL, account_name TEXT NOT NULL, credentials TEXT NOT NULL,
-  cursor TEXT, last_sync_at INTEGER, last_error TEXT, last_summary TEXT, created_at INTEGER NOT NULL);
+  cursor TEXT, last_sync_at INTEGER, last_error TEXT, last_summary TEXT, created_at INTEGER NOT NULL,
+  follow_unmarks INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS id_map (ref TEXT PRIMARY KEY, media_key TEXT, checked_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY, media_key TEXT NOT NULL, kind TEXT NOT NULL, season INTEGER, episode INTEGER,
@@ -89,6 +91,12 @@ export function openDb(file: string) {
   const sqlite = new Database(file);
   sqlite.pragma("journal_mode = WAL");
   sqlite.exec(ddl);
+  // Upgrades for databases created before a column existed. Add-only, safe to run every start.
+  const has = (table: string, col: string) =>
+    (sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
+  if (!has("connections", "follow_unmarks")) {
+    sqlite.exec("ALTER TABLE connections ADD COLUMN follow_unmarks INTEGER NOT NULL DEFAULT 1");
+  }
   return drizzle(sqlite);
 }
 

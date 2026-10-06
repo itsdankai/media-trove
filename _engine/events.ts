@@ -25,14 +25,15 @@ export function eventId(e: NewEvent) {
 }
 
 /**
- * Appends events, skipping any already stored. Sync rule 4: only the user can unmark, so an
- * "unwatched" from any plugin is refused. Returns how many were stored and how many refused.
+ * Appends events, skipping any already stored. Sync rule 4 (amended): a plugin's "unwatched" is
+ * refused unless its connection follows unmarks (`followUnmarks`), and even then it only cancels
+ * what that same plugin reported (see Viewing). Returns how many were stored and how many refused.
  */
-export function appendEvents(db: Db, list: NewEvent[], now = Date.now()) {
+export function appendEvents(db: Db, list: NewEvent[], now = Date.now(), opts: { followUnmarks?: boolean } = {}) {
   let inserted = 0;
   let refused = 0;
   for (const e of list) {
-    if (e.kind === "unwatched" && e.source !== MANUAL) {
+    if (e.kind === "unwatched" && e.source !== MANUAL && !opts.followUnmarks) {
       refused++;
       continue;
     }
@@ -82,22 +83,35 @@ export const episodeTag = (season: number, episode: number) => `s${season}e${epi
  * afterwards starts a new viewing instead of undoing the watch.
  */
 class Viewing {
-  watches = 0;
+  bySource = new Map<string, number>(); // watches, kept per source so an unmark only cancels its own
   counted = false; // has the current viewing already been counted?
   progress: number | null = null; // unfinished progress of the current viewing
 
+  get watches() {
+    let n = 0;
+    for (const v of this.bySource.values()) n += v;
+    return n;
+  }
+
+  private add(source: string) {
+    this.bySource.set(source, (this.bySource.get(source) ?? 0) + 1);
+  }
+
   apply(e: EventRow, threshold: number) {
     if (e.kind === "watched") {
-      this.watches++;
+      this.add(e.source);
       this.counted = true;
       this.progress = null;
     } else if (e.kind === "unwatched") {
-      this.watches = 0;
-      this.counted = false;
+      // The user's unmark clears everything. An app's unmark (rule 4, amended) clears only what that
+      // app reported: your own marks and other apps' marks stay.
+      if (e.source === MANUAL) this.bySource.clear();
+      else this.bySource.delete(e.source);
+      this.counted = this.watches > 0;
       this.progress = null;
     } else if (e.kind === "progress" && e.progress != null) {
       if (e.progress >= threshold) {
-        if (!this.counted) this.watches++;
+        if (!this.counted) this.add(e.source);
         this.counted = true;
         this.progress = null;
       } else {

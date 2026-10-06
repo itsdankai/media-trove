@@ -55,7 +55,7 @@ export type MediaRef = {
 
 export type PluginEvent = {
   media: MediaRef;
-  kind: "watched" | "progress" | "finished";
+  kind: "watched" | "unwatched" | "progress" | "finished"; // unwatched: unmarked in the app (MediaTrove only applies it if the user lets this connection follow unmarks)
   season?: number;
   episode?: number;
   progress?: number; // 0..1

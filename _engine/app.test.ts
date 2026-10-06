@@ -112,7 +112,7 @@ describe("api", () => {
       state: Record<string, unknown>;
     }[];
     const by = Object.fromEntries(lib.map((i) => [i.media.key, i.state]));
-    expect(by["tmdb-show-95396"]).toMatchObject({ status: "planned", watchedEpisodes: [] });
+    expect(by["tmdb-show-95396"]).toBeUndefined(); // nothing left watched: not listed (no watchlist yet)
     expect(by["audible-audiobook-B08G9PRS1K"]).toMatchObject({ status: "finished", progress: 1 });
   });
 

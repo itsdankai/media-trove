@@ -104,6 +104,7 @@ export type Connection = {
   lastError: string | null;
   lastSummary: SyncSummary | null;
   syncing: boolean;
+  followUnmarks: boolean;
   createdAt: number;
 };
 
@@ -159,6 +160,8 @@ export const api = {
   syncNow: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/sync`),
   resync: (id: string) => send<SyncSummary>("POST", `/api/connections/${id}/resync`),
   disconnect: (id: string) => fetch(`/api/connections/${id}`, { method: "DELETE" }),
+  setFollowUnmarks: (id: string, followUnmarks: boolean) =>
+    send<{ ok: true }>("PATCH", `/api/connections/${id}`, { followUnmarks }),
 };
 
 export const kindLabel: Record<MediaKind, string> = { movie: "Movies", show: "Shows", audiobook: "Audiobooks" };
