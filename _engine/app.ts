@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { zValidator } from "@hono/zod-validator";
 import { desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
@@ -23,8 +25,13 @@ const eventSchema = z.object({
 
 export type Plugins = { host: PluginHost; sync: Sync };
 
-export function createApp(db: Db, providers: MetadataProvider[], plugins?: Plugins) {
-  const lib = createLibrary(db, providers);
+export function createApp(
+  db: Db,
+  providers: MetadataProvider[],
+  plugins?: Plugins,
+  opts: { artworkDir?: string } = {},
+) {
+  const lib = createLibrary(db, providers, opts);
 
   const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) =>
     project(m.kind as MediaKind, list, m.extra.airedEpisodes as number | undefined, getSettings(db).watchedThreshold);
@@ -62,6 +69,19 @@ export function createApp(db: Db, providers: MetadataProvider[], plugins?: Plugi
       })
 
       .get("/api/health", (c) => c.json({ ok: true }))
+
+      // Covers saved from connected apps (names are hashes we generated; nothing else is served).
+      .get("/api/artwork/:file", (c) => {
+        const file = c.req.param("file");
+        if (!opts.artworkDir || !/^[a-f0-9]{20}\.(jpg|png|webp)$/.test(file)) return c.notFound();
+        try {
+          const body = readFileSync(join(opts.artworkDir, file));
+          const type = file.endsWith(".png") ? "image/png" : file.endsWith(".webp") ? "image/webp" : "image/jpeg";
+          return c.body(body, 200, { "content-type": type, "cache-control": "public, max-age=86400" });
+        } catch {
+          return c.notFound();
+        }
+      })
 
       .get("/api/config", (c) => c.json({ tmdb: Boolean(process.env.TMDB_API_KEY), plugins: Boolean(plugins) }))
 
@@ -201,6 +221,15 @@ export function createApp(db: Db, providers: MetadataProvider[], plugins?: Plugi
         const { sync } = needPlugins();
         try {
           return c.json(await sync.syncNow(c.req.param("id")));
+        } catch (e) {
+          return c.json({ error: (e as Error).message }, 502);
+        }
+      })
+
+      .post("/api/connections/:id/resync", async (c) => {
+        const { sync } = needPlugins();
+        try {
+          return c.json(await sync.resync(c.req.param("id")));
         } catch (e) {
           return c.json({ error: (e as Error).message }, 502);
         }

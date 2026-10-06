@@ -186,7 +186,7 @@ export class ProcessHost implements PluginHost {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(300_000),
     });
     const data = (await r.json().catch(() => ({}))) as { error?: string; user?: boolean };
     if (!r.ok) {

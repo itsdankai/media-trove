@@ -104,6 +104,9 @@ export function decodeWatched(serialized: string, videoIds: string[]): string[] 
   return videoIds.filter((_, i) => bit(i + offset));
 }
 
+export const hasActivity = (i: LibraryItem) =>
+  Boolean(i.state.timesWatched || i.state.flaggedWatched || i.state.timeOffset || i.state.watched);
+
 /** "tt0903747:5:14" → { imdb, season 5, episode 14 } */
 export function parseVideoId(id: string) {
   const [imdb, s, e] = id.split(":");
@@ -116,8 +119,13 @@ export function parseVideoId(id: string) {
  * Stremio keeps counts and bitfields, not dated history, so the cursor remembers what was already
  * reported (watch count per movie, watched episodes per show). Each sync reports only what's new.
  */
-export type Cursor = { since: string; counts: Record<string, number>; episodes: Record<string, string[]> };
-const emptyCursor = (): Cursor => ({ since: "", counts: {}, episodes: {} });
+export type Cursor = {
+  since: string;
+  counts: Record<string, number>;
+  episodes: Record<string, string[]>;
+  retry: string[]; // item ids to try again next round
+};
+const emptyCursor = (): Cursor => ({ since: "", counts: {}, episodes: {}, retry: [] });
 
 export default definePlugin<Creds>({
   manifest,
@@ -141,13 +149,44 @@ export default definePlugin<Creds>({
       ids: [],
       all: true,
     });
-    const changed = items.filter((i) => !i.removed && i._mtime > cursor.since && i._id.startsWith("tt"));
-    const events: PluginEvent[] = [];
-    for (const item of changed) events.push(...(await itemEvents(item, cursor)));
-    cursor.since = changed.reduce((m, i) => (i._mtime > m ? i._mtime : m), cursor.since);
-    return { events, cursor };
+    const retry = new Set(cursor.retry);
+    const todo = items
+      // Not just the library: Stremio keeps anything you play without adding it as a "removed, temp"
+      // item, and that's real watch history too. Only skip items with no activity at all.
+      .filter((i) => hasActivity(i) && i._id.startsWith("tt") && (i._mtime > cursor.since || retry.has(i._id)))
+      .sort((a, b) => a._mtime.localeCompare(b._mtime));
+    const { events, done, failed } = await processBudgeted(todo, (item) => itemEvents(item, cursor));
+    // Anything that failed or didn't fit in this round is retried next round, whatever its time.
+    cursor.retry = [...failed, ...todo.slice(done).map((i) => i._id)];
+    cursor.since = todo.slice(0, done).reduce((m, i) => (i._mtime > m ? i._mtime : m), cursor.since);
+    return { events, cursor, more: done < todo.length };
   },
 });
+
+/**
+ * Works through items a few at a time, stopping after a time budget so one sync never runs
+ * long. A big library (hundreds of shows, each needing an episode list) takes several rounds.
+ */
+export async function processBudgeted<T extends { _id: string }>(
+  todo: T[],
+  fn: (item: T) => Promise<PluginEvent[]>,
+  opts = { concurrency: 6, budgetMs: 90_000 },
+) {
+  const deadline = Date.now() + opts.budgetMs;
+  const events: PluginEvent[] = [];
+  const failed: string[] = [];
+  let done = 0;
+  while (done < todo.length && Date.now() < deadline) {
+    const batch = todo.slice(done, done + opts.concurrency);
+    const results = await Promise.allSettled(batch.map(fn));
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") events.push(...r.value);
+      else failed.push(batch[i]._id);
+    });
+    done += batch.length;
+  }
+  return { events, done, failed };
+}
 
 /** Events for one library item, reporting only what `cursor` hasn't seen yet (and updating it). */
 export async function itemEvents(
@@ -196,6 +235,11 @@ export async function itemEvents(
 const offsetIso = (iso: string, ms: number) => new Date(Date.parse(iso) + ms).toISOString();
 
 async function cinemetaVideos(imdb: string): Promise<Video[]> {
-  const r = await getJson<{ meta?: { videos?: Video[] } }>(`${CINEMETA}/meta/series/${imdb}.json`);
-  return r.meta?.videos ?? [];
+  try {
+    const r = await getJson<{ meta?: { videos?: Video[] } }>(`${CINEMETA}/meta/series/${imdb}.json`, {}, 20_000);
+    return r.meta?.videos ?? [];
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return []; // not in Cinemeta: nothing to decode
+    throw e;
+  }
 }

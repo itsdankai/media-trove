@@ -85,7 +85,7 @@ describe("stremio", () => {
   });
 
   it("reports a watched movie once, then only new viewings", async () => {
-    const cursor: Cursor = { since: "", counts: {}, episodes: {} };
+    const cursor: Cursor = { since: "", counts: {}, episodes: {}, retry: [] };
     const first = await itemEvents(movie(3), cursor);
     expect(first.filter((e) => e.kind === "watched")).toHaveLength(1); // history before MediaTrove counts once
     const again = await itemEvents(movie(3, 1_000_000, "2026-10-06T20:00:00.000Z"), cursor);
@@ -98,7 +98,7 @@ describe("stremio", () => {
   it("reports newly watched episodes and the current episode's progress", async () => {
     const videos = vids(5);
     const ids = orderVideos(videos);
-    const cursor: Cursor = { since: "", counts: {}, episodes: {} };
+    const cursor: Cursor = { since: "", counts: {}, episodes: {}, retry: [] };
     const series = (watched: string[], videoId: string, offset: number): LibraryItem => ({
       _id: "tt1",
       name: "Show",

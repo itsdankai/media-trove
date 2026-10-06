@@ -15,6 +15,8 @@ export type NewEvent = {
 
 export const MANUAL = "manual";
 export const DEFAULT_THRESHOLD = 0.9;
+/** Audiobooks count as finished at 99%: apps often stop a few seconds short (end credits) without marking them done. */
+export const BOOK_DONE = 0.99;
 
 /** Same content, same id. A plugin re-sending an event it already sent changes nothing. */
 export function eventId(e: NewEvent) {
@@ -150,7 +152,7 @@ export function project(
   for (const e of list) {
     if (e.kind === "progress" && e.progress != null) {
       progress = Math.min(1, Math.max(0, e.progress));
-      finished = progress >= 1;
+      finished = progress >= BOOK_DONE;
     }
     if (e.kind === "finished") {
       progress = 1;

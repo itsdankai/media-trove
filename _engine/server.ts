@@ -25,11 +25,12 @@ const host = new ProcessHost(projectRoot, {
     "https://raw.githubusercontent.com/itsdankai/media-trove/main/plugins/catalog.json",
   customUrls: (process.env.MEDIATROVE_PLUGIN_URLS ?? "").split(",").filter(Boolean),
 });
-const sync = createSync(db, createLibrary(db, providers), host, loadKey(dataDir));
+const artworkDir = join(dataDir, "artwork");
+const sync = createSync(db, createLibrary(db, providers, { artworkDir }), host, loadKey(dataDir));
 const stopSchedule = sync.schedule();
 
 const app = new Hono()
-  .route("/", createApp(db, providers, { host, sync }))
+  .route("/", createApp(db, providers, { host, sync }, { artworkDir }))
   .use("/*", serveStatic({ root }))
   // Client-side routes (/shows, /media/…) all load the same page.
   .get("*", (c) => {
