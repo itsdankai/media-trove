@@ -144,7 +144,11 @@ export default definePlugin<Creds>({
       refreshed = true;
     }
 
-    const watched = await rpc<WatchedItem[]>(c, "sync_pull_watched_items", { p_profile_id: c.profile });
+    const watched = await pullWatched(
+      (page) =>
+        rpc<WatchedItem[]>(c, "sync_pull_watched_items", { p_profile_id: c.profile, p_page: page, p_page_size: PAGE }),
+      cursor.watchedSince,
+    );
     const progress = await rpc<ProgressRow[]>(c, "sync_pull_watch_progress", {
       p_profile_id: c.profile,
       p_since_last_watched: cursor.progressSince || null,
@@ -161,6 +165,23 @@ export default definePlugin<Creds>({
     return { events, cursor: next, credentials: refreshed ? c : undefined };
   },
 });
+
+/** Nuvio's server returns at most 1,000 rows per call, so watched items are read page by page. */
+const PAGE = 1000;
+
+/**
+ * Pages are newest first, so stop at the first page that reaches items already seen (`since`),
+ * or at a short page (the end). Capped at 200 pages (200,000 items).
+ */
+export async function pullWatched(fetchPage: (page: number) => Promise<WatchedItem[]>, since: number) {
+  const all: WatchedItem[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const rows = await fetchPage(page);
+    all.push(...rows);
+    if (rows.length < PAGE || rows.some((r) => r.watched_at <= since)) break;
+  }
+  return all;
+}
 
 const isShow = (type: string) => type === "series" || type === "show" || type === "tv";
 

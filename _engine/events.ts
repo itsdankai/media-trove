@@ -115,6 +115,10 @@ export function project(
   airedEpisodes?: number,
   threshold = DEFAULT_THRESHOLD,
 ): TrackState {
+  // Same instant, different kinds: a position report goes before "watched"/"finished", so marking
+  // something done wins over the stale position some apps keep (Stremio keeps 29% after "mark watched").
+  const rank = (k: string) => (k === "progress" ? 0 : 1);
+  list = [...list].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || rank(a.kind) - rank(b.kind));
   const last = list.at(-1)?.occurredAt ?? null;
 
   if (kind === "movie") {
