@@ -92,7 +92,7 @@ describe("api", () => {
     }[];
     const by = Object.fromEntries(lib.map((i) => [i.media.key, i.state]));
     expect(by["tmdb-movie-603"]).toMatchObject({ status: "completed", watchCount: 1 });
-    expect(by["tmdb-show-95396"]).toMatchObject({ status: "caught_up" }); // 3 of 3 aired, 16 more announced
+    expect(by["tmdb-show-95396"]).toMatchObject({ status: "completed" }); // 3 of 3 aired; more announced but undated
     expect(by["tmdb-show-95396"].watchedEpisodes).toHaveLength(3);
     expect(by["audible-audiobook-B08G9PRS1K"]).toMatchObject({ status: "listening", progress: 0.4 });
 

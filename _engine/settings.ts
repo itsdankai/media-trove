@@ -5,9 +5,15 @@ import { DEFAULT_THRESHOLD } from "./events.ts";
 export type Settings = {
   watchedThreshold: number; // 0.5..1 — progress at or above this counts as watched (sync rule 3)
   setupComplete: boolean;
+  /**
+   * Shows: "Caught up" (rather than Completed) when you've seen every aired episode and the next one
+   * airs within this many days. 0 = any time, however far off (builder, 2026-10-06: Silo's next
+   * season was 9 months away).
+   */
+  caughtUpDays: number;
 };
 
-const defaults: Settings = { watchedThreshold: DEFAULT_THRESHOLD, setupComplete: false };
+const defaults: Settings = { watchedThreshold: DEFAULT_THRESHOLD, setupComplete: false, caughtUpDays: 90 };
 
 export function getSettings(db: Db): Settings {
   const rows = db.select().from(settings).all();

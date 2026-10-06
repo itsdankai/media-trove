@@ -64,24 +64,32 @@ export function createApp(
     imdb: parseImdb,
   };
 
-  const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) =>
-    project(
+  const stateOf = (m: Pick<MediaRow, "key" | "kind" | "extra">, list = eventsFor(db, m.key)) => {
+    const s = getSettings(db);
+    return project(
       m.kind as MediaKind,
       list,
       m.extra.airedEpisodes as number | undefined,
-      getSettings(db).watchedThreshold,
-      moreComing(m),
+      s.watchedThreshold,
+      moreComing(m, s.caughtUpDays),
     );
+  };
 
   /**
-   * "Caught up" means an episode you haven't seen is actually on its way: one is scheduled, or the
-   * current season still has unaired episodes. A finished season with nothing announced reads as
-   * Completed, even when TMDB calls the show "Returning" (builder, 2026-10-06: Furious S1).
+   * "Caught up" means an episode you haven't seen is actually on its way, soon enough to matter: the
+   * next one airs within the user's window (Settings, default 90 days). A finished season with nothing
+   * announced, or a next season months away, reads as Completed, even when TMDB calls the show
+   * "Returning" (builder, 2026-10-06: Furious S1, Silo S4 in 9 months). With the window set to
+   * "any time", any announced episode counts, dated or not.
    */
-  const moreComing = (m: Pick<MediaRow, "kind" | "extra">) =>
-    m.kind === "show" &&
-    (Boolean(m.extra.nextEpisode) ||
-      ((m.extra.totalEpisodes as number) ?? 0) > ((m.extra.airedEpisodes as number) ?? 0));
+  const moreComing = (m: Pick<MediaRow, "kind" | "extra">, days: number, now = Date.now()) => {
+    if (m.kind !== "show") return false;
+    const next = m.extra.nextEpisode as { airDate?: string | null } | null | undefined;
+    const unaired = ((m.extra.totalEpisodes as number) ?? 0) > ((m.extra.airedEpisodes as number) ?? 0);
+    if (!days) return Boolean(next) || unaired; // 0: any time
+    if (!next?.airDate) return false;
+    return Date.parse(`${next.airDate}T00:00:00Z`) - now <= days * 86_400_000;
+  };
 
   const needPlugins = () => {
     if (!plugins) throw new ProviderUnavailable("Plugins are not enabled in this instance.");
@@ -146,7 +154,11 @@ export function createApp(
         "/api/settings",
         zValidator(
           "json",
-          z.object({ watchedThreshold: z.number().min(0.5).max(1).optional(), setupComplete: z.boolean().optional() }),
+          z.object({
+            watchedThreshold: z.number().min(0.5).max(1).optional(),
+            setupComplete: z.boolean().optional(),
+            caughtUpDays: z.number().int().min(0).max(730).optional(), // 0 = any time
+          }),
         ),
         (c) => c.json(updateSettings(db, c.req.valid("json"))),
       )

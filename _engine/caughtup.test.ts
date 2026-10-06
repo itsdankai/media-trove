@@ -38,9 +38,12 @@ describe("Caught up", () => {
       genres: [],
       extra: { status: "Returning Series", airedEpisodes: 2, ...extra },
     });
+    const soon = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    const later = new Date(Date.now() + 270 * 86_400_000).toISOString().slice(0, 10);
     const shows = [
-      show("tmdb-show-10", { totalEpisodes: 3, nextEpisode: { season: 1, number: 3, airDate: "2026-10-07" } }), // Last Seen
+      show("tmdb-show-10", { totalEpisodes: 3, nextEpisode: { season: 1, number: 3, airDate: soon } }), // Last Seen
       show("tmdb-show-11", { totalEpisodes: 2, nextEpisode: null }), // Furious: season done, nothing announced
+      show("tmdb-show-12", { totalEpisodes: 3, nextEpisode: { season: 2, number: 1, airDate: later } }), // Silo: 9 months out
     ];
     const provider: MetadataProvider = {
       kinds: ["show"],
@@ -61,12 +64,29 @@ describe("Caught up", () => {
           occurredAt: `2026-10-0${episode}T20:00:00.000Z`,
         })),
       );
-    const list = (await (await createApp(appDb, [provider]).request("/api/library?kind=show")).json()) as {
-      media: { key: string };
-      state: { status: string };
-    }[];
-    const status = Object.fromEntries(list.map((i) => [i.media.key, i.state.status]));
-    expect(status).toEqual({ "tmdb-show-10": "caught_up", "tmdb-show-11": "completed" });
+    const app = createApp(appDb, [provider]);
+    const statuses = async () =>
+      Object.fromEntries(
+        (
+          (await (await app.request("/api/library?kind=show")).json()) as {
+            media: { key: string };
+            state: { status: string };
+          }[]
+        ).map((i) => [i.media.key, i.state.status]),
+      );
+    // Default window, 90 days: the next season 9 months away doesn't count yet.
+    expect(await statuses()).toEqual({
+      "tmdb-show-10": "caught_up",
+      "tmdb-show-11": "completed",
+      "tmdb-show-12": "completed",
+    });
+    // "Any time": it does.
+    await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ caughtUpDays: 0 }),
+    });
+    expect((await statuses())["tmdb-show-12"]).toBe("caught_up");
   });
 
   it("a new episode airs (aired count goes up): back to Watching", () => {
