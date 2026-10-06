@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { createCalendar } from "./calendar.ts";
 import { connections, type Db, events, type MediaRow, media } from "./db.ts";
 import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
 import { fetchAniList, fetchMal, parseAniList, parseMal } from "./imports/anime-lists.ts";
@@ -47,6 +48,7 @@ export function createApp(
   opts: { artworkDir?: string; dataDir?: string; fetchFn?: typeof fetch } = {},
 ) {
   const lib = createLibrary(db, providers, opts);
+  const calendar = createCalendar(db, lib);
   const imports = opts.dataDir ? createImports(db, lib, { dataDir: opts.dataDir, fetchFn: opts.fetchFn }) : null;
   const needImports = () => {
     if (!imports) throw new ProviderUnavailable("Imports are not enabled in this instance.");
@@ -173,25 +175,40 @@ export function createApp(
         },
       )
 
-      .get("/api/library", zValidator("query", z.object({ kind: kindSchema.optional() })), (c) => {
-        const { kind } = c.req.valid("query");
-        const keys = db
-          .selectDistinct({ k: events.mediaKey })
-          .from(events)
-          .all()
-          .map((r) => r.k);
-        if (!keys.length) return c.json([]);
-        const rows = db
-          .select()
-          .from(media)
-          .where(inArray(media.key, keys))
-          .all()
-          .filter((m) => !kind || m.kind === kind);
-        // "planned" = nothing left (e.g. unmarked everywhere). There's no watchlist yet, so it isn't shown.
-        const items = rows.map((m) => ({ media: m, state: stateOf(m) })).filter((i) => i.state.status !== "planned");
-        items.sort((a, b) => (b.state.lastActivityAt ?? "").localeCompare(a.state.lastActivityAt ?? ""));
-        return c.json(items);
-      })
+      .get(
+        "/api/calendar",
+        zValidator("query", z.object({ days: z.coerce.number().int().min(1).max(365).default(60) })),
+        async (c) => c.json(await calendar.upcoming(c.req.valid("query").days)),
+      )
+
+      // kind=movie / kind=show leave anime out; section=anime is anime movies and shows together.
+      .get(
+        "/api/library",
+        zValidator("query", z.object({ kind: kindSchema.optional(), section: z.enum(["anime"]).optional() })),
+        (c) => {
+          const { kind, section } = c.req.valid("query");
+          const keys = db
+            .selectDistinct({ k: events.mediaKey })
+            .from(events)
+            .all()
+            .map((r) => r.k);
+          if (!keys.length) return c.json([]);
+          const rows = db
+            .select()
+            .from(media)
+            .where(inArray(media.key, keys))
+            .all()
+            .filter((m) =>
+              section === "anime"
+                ? m.kind !== "audiobook" && m.extra.anime === true
+                : (!kind || m.kind === kind) && !(kind && kind !== "audiobook" && m.extra.anime === true),
+            );
+          // "planned" = nothing left (e.g. unmarked everywhere). There's no watchlist yet, so it isn't shown.
+          const items = rows.map((m) => ({ media: m, state: stateOf(m) })).filter((i) => i.state.status !== "planned");
+          items.sort((a, b) => (b.state.lastActivityAt ?? "").localeCompare(a.state.lastActivityAt ?? ""));
+          return c.json(items);
+        },
+      )
 
       .get(
         "/api/history",

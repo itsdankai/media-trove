@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import {
+  CalendarDays,
   Clapperboard,
   FileUp,
   Gem,
@@ -9,6 +10,7 @@ import {
   House,
   Search as SearchIcon,
   Settings as SettingsIcon,
+  Sparkles,
   Store,
   Tv,
 } from "lucide-react";
@@ -21,7 +23,9 @@ const nav = [
   { to: "/", label: "Home", icon: House, end: true },
   { to: "/movies", label: "Movies", icon: Clapperboard },
   { to: "/shows", label: "Shows", icon: Tv },
+  { to: "/anime", label: "Anime", icon: Sparkles },
   { to: "/audiobooks", label: "Audiobooks", icon: Headphones },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/history", label: "History", icon: History },
 ];
 

@@ -28,6 +28,11 @@ export interface MetadataProvider {
   resolve?(ref: MediaRef): Promise<string | null>;
   /** An episode's own IMDb id (IMDb exports rate single episodes) -> its show key, season and number. */
   findEpisode?(imdb: string): Promise<{ key: string; season: number; episode: number } | null>;
+  /** Not-yet-released titles by an author (the calendar). */
+  upcoming?(
+    author: string,
+    language?: string | null,
+  ): Promise<(SearchResult & { releaseDate: string; series: string | null })[]>;
 }
 
 export type { MediaRef } from "../../plugins/_sdk/index.ts";

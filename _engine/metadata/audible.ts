@@ -28,7 +28,9 @@ const domains: Record<string, string> = {
   in: "audible.in",
   jp: "audible.co.jp",
 };
-const groups = "contributors,media,product_attrs,product_desc,series,category_ladders";
+const groups = "contributors,media,product_attrs,product_desc,series,category_ladders,rating";
+/** Bumped when details gain fields; rows cached with an older version are fetched again (library.ts). */
+export const META_VERSION = 2;
 
 // biome-ignore lint/suspicious/noExplicitAny: Audible responses are loosely typed JSON
 type Json = any;
@@ -140,6 +142,9 @@ export function audibleProvider(
         runtimeMin: p.runtime_length_min ?? null,
         series: series ? { name: series.title, position: series.sequence ?? null } : null,
         releaseDate: p.release_date ?? null,
+        language: p.language ?? null,
+        rating: Number(p.rating?.overall_distribution?.display_average_rating) || null, // out of 5
+        metaVersion: META_VERSION,
       },
     };
   }
@@ -170,6 +175,20 @@ export function audibleProvider(
       }
       const asins = pickEdition(ref, products);
       return asins.length ? makeKey("audible", "audiobook", asins.join("+")) : null;
+    },
+
+    /** Books by an author not out yet (Audible lists pre-orders with their release date), in one language. */
+    async upcoming(author, language) {
+      const today = new Date().toISOString().slice(0, 10);
+      const data = await get("", { author, products_sort_by: "-ReleaseDate", num_results: "20" });
+      return (data.products as Json[])
+        .filter((p) => p.release_date && p.release_date > today)
+        .filter((p) => !language || !p.language || p.language === language)
+        .map((p) => ({
+          ...toResult(p),
+          releaseDate: p.release_date as string,
+          series: (p.series as Json[])?.[0]?.title ?? null,
+        }));
     },
 
     async details(key): Promise<MediaInfo> {

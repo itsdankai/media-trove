@@ -15,6 +15,8 @@ import {
 } from "./metadata/types.ts";
 
 const RETRY_MISS_MS = 24 * 60 * 60 * 1000;
+/** The metadata version providers write now (tmdb.ts / audible.ts META_VERSION). */
+const CURRENT_META = 2;
 
 /**
  * Where a connected app's own cover wins over the catalog's: merged editions (combined keys like
@@ -105,7 +107,46 @@ export function createLibrary(db: Db, providers: MetadataProvider[], opts: { art
     return key;
   }
 
-  return { providerFor, upsertMedia, ensureMedia, resolve, saveArtwork, artworkDir: opts.artworkDir };
+  /**
+   * Fetches details again where the cache is behind: rows from before a provider added fields
+   * (extra.metaVersion), and shows still airing whose next episode may have moved (daily).
+   * A few at a time; a failure leaves the old row in place for the next run.
+   */
+  let refreshing: Promise<number> | null = null;
+  function refreshStale(now = Date.now()) {
+    refreshing ??= (async () => {
+      const day = 24 * 60 * 60 * 1000;
+      const ended = new Set(["Ended", "Canceled"]);
+      const stale = db
+        .select()
+        .from(media)
+        .all()
+        .filter(
+          (m) =>
+            m.extra.metaVersion !== CURRENT_META ||
+            (m.kind === "show" && !ended.has(String(m.extra.status)) && now - m.updatedAt > day),
+        );
+      let done = 0;
+      for (let i = 0; i < stale.length; i += 3) {
+        await Promise.all(
+          stale.slice(i, i + 3).map(async (m) => {
+            try {
+              upsertMedia(await providerFor(m.kind as MediaKind).details(m.key));
+              done++;
+            } catch (e) {
+              console.error("refresh:", m.key, (e as Error).message);
+            }
+          }),
+        );
+      }
+      return done;
+    })().finally(() => {
+      refreshing = null;
+    });
+    return refreshing;
+  }
+
+  return { providerFor, upsertMedia, ensureMedia, resolve, saveArtwork, refreshStale, artworkDir: opts.artworkDir };
 }
 
 export type Library = ReturnType<typeof createLibrary>;

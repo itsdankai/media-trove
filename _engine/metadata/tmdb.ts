@@ -19,6 +19,8 @@ const api = "https://api.themoviedb.org/3";
 const img = (path: string | null | undefined, size = "w342") =>
   path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 const tmdbType = (kind: MediaKind) => (kind === "movie" ? "movie" : "tv");
+/** Bumped when details gain fields; rows cached with an older version are fetched again (library.ts). */
+export const META_VERSION = 2;
 
 // biome-ignore lint/suspicious/noExplicitAny: TMDB responses are loosely typed JSON
 type Json = any;
@@ -79,9 +81,18 @@ export function tmdbProvider(apiKey = process.env.TMDB_API_KEY, fetchFn: typeof 
     async details(key): Promise<MediaInfo> {
       const { kind, id } = parseKey(key);
       const r = await get(`/${tmdbType(kind)}/${id}`, { append_to_response: "external_ids" });
-      const base = { ...toResult(kind, r), genres: (r.genres as Json[]).map((g) => g.name) };
+      const genres = (r.genres as Json[]).map((g) => g.name as string);
+      const base = { ...toResult(kind, r), genres };
       // Other services' ids, so writing back to an app can name the title its way (Stremio uses IMDb).
-      const ids = { imdb: r.external_ids?.imdb_id || null, tvdb: r.external_ids?.tvdb_id ?? null };
+      const ids = {
+        imdb: r.external_ids?.imdb_id || null,
+        tvdb: r.external_ids?.tvdb_id ?? null,
+        // For filters and the Anime section (phase 7). Anime = animated and originally Japanese.
+        rating: typeof r.vote_average === "number" && r.vote_count > 0 ? Math.round(r.vote_average * 10) / 10 : null,
+        originalLanguage: r.original_language ?? null,
+        anime: genres.includes("Animation") && r.original_language === "ja",
+        metaVersion: META_VERSION,
+      };
       if (kind === "movie")
         return { ...base, extra: { ...ids, runtime: r.runtime ?? null, backdrop: img(r.backdrop_path, "w1280") } };
       const seasons: Season[] = (r.seasons as Json[])
