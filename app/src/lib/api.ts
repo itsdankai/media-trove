@@ -75,7 +75,7 @@ export type NewEvent = Pick<EventRow, "mediaKey" | "kind"> & {
   progress?: number;
 };
 
-export type Settings = { watchedThreshold: number; setupComplete: boolean };
+export type Settings = { watchedThreshold: number; setupComplete: boolean; caughtUpDays: number }; // caughtUpDays 0 = any time
 
 export type Field = {
   key: string;

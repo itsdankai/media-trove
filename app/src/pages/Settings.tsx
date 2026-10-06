@@ -43,12 +43,58 @@ export function Settings() {
               <span className="text-sm text-muted-foreground">Saved. Your library was recalculated.</span>
             )}
           </div>
+          {settings && <CaughtUpWindow days={settings.caughtUpDays} />}
         </Card>
       </section>
 
       <Connections />
 
       <Backups />
+    </div>
+  );
+}
+
+const windows = [
+  { days: 30, label: "30 days" },
+  { days: 60, label: "60 days" },
+  { days: 90, label: "90 days" },
+  { days: 180, label: "6 months" },
+  { days: 0, label: "Any time" },
+];
+
+/** How soon a show's next episode must air for it to read "Caught up" rather than Completed. Saves on change. */
+function CaughtUpWindow({ days }: { days: number }) {
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: (d: number) => api.saveSettings({ caughtUpDays: d }),
+    onSuccess: (s) => {
+      qc.setQueryData(["settings"], s);
+      qc.invalidateQueries({ queryKey: ["library"] });
+      qc.invalidateQueries({ queryKey: ["media"] });
+    },
+  });
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <label htmlFor="caught-up" className="flex flex-wrap items-center gap-2 text-sm font-medium">
+        Show "Caught up" when the next episode airs within
+        <select
+          id="caught-up"
+          value={days}
+          onChange={(e) => save.mutate(Number(e.target.value))}
+          disabled={save.isPending}
+          className="rounded-md border bg-card px-2 py-1 font-medium [&>option]:bg-card"
+        >
+          {windows.map((w) => (
+            <option key={w.days} value={w.days}>
+              {w.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="text-xs text-muted-foreground">
+        When you've seen every aired episode. Further off than this (a new season next year), the show reads Completed
+        until the date gets close.
+      </p>
     </div>
   );
 }
