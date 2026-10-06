@@ -208,7 +208,7 @@ export async function itemEvents(
     const newWatches = known === 0 ? Math.min(count, 1) : Math.max(0, count - known);
     for (let i = 0; i < newWatches; i++) events.push({ media, kind: "watched", occurredAt: offsetIso(at, -i) });
     // Marked unwatched in Stremio: its count drops back to zero.
-    if (known > 0 && count === 0) events.push({ media, kind: "unwatched", occurredAt: at });
+    if (known > 0 && count === 0) events.push({ media, kind: "unwatched", occurredAt: item._mtime }); // when the change was saved, not the last watch
     cursor.counts[item._id] = count === 0 ? 0 : Math.max(count, known);
     // "Mark as watched" leaves the old position in place; don't report it as a new viewing.
     if (progress > 0 && newWatches === 0) events.push({ media, kind: "progress", progress, occurredAt: at });
@@ -234,7 +234,7 @@ export async function itemEvents(
       for (const id of already) {
         const ep = parseVideoId(id);
         if (ep && ep.season > 0 && !now.has(id)) {
-          events.push({ media, kind: "unwatched", season: ep.season, episode: ep.episode, occurredAt: at });
+          events.push({ media, kind: "unwatched", season: ep.season, episode: ep.episode, occurredAt: item._mtime });
         }
       }
       cursor.episodes[item._id] = watched;

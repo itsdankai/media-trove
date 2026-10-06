@@ -31,9 +31,9 @@ export function Marketplace() {
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search plugins…"
+          placeholder="Search apps and services…"
           className="pl-9"
-          aria-label="Search plugins"
+          aria-label="Search apps and services"
         />
       </div>
 
@@ -66,7 +66,7 @@ export function Marketplace() {
                 })}
               </div>
               <Button size="sm" variant={p.connections ? "outline" : "default"} onClick={() => setOpen(p)}>
-                {p.connections ? "Add another account" : "Install"}
+                {p.connections ? "Add another account" : "Connect"}
               </Button>
             </div>
           </Card>
@@ -113,7 +113,7 @@ function ConnectDialog({ plugin, onClose }: { plugin: CatalogEntry; onClose: () 
           <DialogDescription>{manifest?.connect.note ?? plugin.description}</DialogDescription>
         </DialogHeader>
 
-        {isLoading && <p className="text-sm text-muted-foreground">Starting plugin…</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">Getting ready…</p>}
         {error && <p className="text-sm text-destructive">{error.message}</p>}
 
         {connect.isSuccess ? (
@@ -168,7 +168,7 @@ function AddByUrl() {
   });
   return (
     <details className="rounded-xl border p-4 text-sm">
-      <summary className="cursor-pointer font-medium">Add a plugin by URL</summary>
+      <summary className="cursor-pointer font-medium">Add a community plugin by URL</summary>
       <form
         className="mt-3 flex flex-col gap-2 sm:flex-row"
         onSubmit={(e) => {
