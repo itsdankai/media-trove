@@ -103,10 +103,10 @@ class Viewing {
       this.counted = true;
       this.progress = null;
     } else if (e.kind === "unwatched") {
-      // The user's unmark clears everything. An app's unmark (rule 4, amended) clears only what that
-      // app reported: your own marks and other apps' marks stay.
+      // Latest action wins (rule 4, amended twice — builder, 2026-10-06): an unmark from any app clears
+      // every app's earlier marks; only the user's own marks survive it. The user's unmark clears all.
       if (e.source === MANUAL) this.bySource.clear();
-      else this.bySource.delete(e.source);
+      else for (const s of [...this.bySource.keys()]) if (s !== MANUAL) this.bySource.delete(s);
       this.counted = this.watches > 0;
       this.progress = null;
     } else if (e.kind === "progress" && e.progress != null) {

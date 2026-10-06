@@ -36,8 +36,14 @@ describe("follow unmarks (sync rule 4, amended)", () => {
     ]);
   });
 
-  it("never removes another app's mark", () => {
-    const r = fold([ep("watched", "stremio", 1), ep("watched", "nuvio", 2), ep("unwatched", "nuvio", 3)], true);
+  it("latest action wins: an unmark in one app clears another app's earlier mark", () => {
+    // Furious S1E1: watched in Nuvio and Stremio, then unmarked in Nuvio.
+    const r = fold([ep("watched", "nuvio", 1), ep("watched", "stremio", 2), ep("unwatched", "nuvio", 3)], true);
+    expect(r.state.watchedEpisodes).toEqual([]);
+  });
+
+  it("…but a newer watch in any app brings it back", () => {
+    const r = fold([ep("watched", "stremio", 1), ep("unwatched", "nuvio", 2), ep("watched", "stremio", 3)], true);
     expect(r.state.watchedEpisodes).toEqual(["s1e1"]);
   });
 

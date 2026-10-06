@@ -138,7 +138,7 @@ function Connections() {
                 <span>
                   Also remove things I unmark in {name(c.pluginId)}
                   <span className="block text-xs text-muted-foreground">
-                    Only what {name(c.pluginId)} itself reported. Your own marks and other apps' are kept.
+                    Your latest action in any app wins. Marks you made yourself in MediaTrove are always kept.
                   </span>
                 </span>
               </label>

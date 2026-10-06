@@ -177,7 +177,8 @@ export const statusLabel: Record<TrackState["status"], string> = {
 
 /** 0..1 completion for any kind, for progress bars. */
 export function completion(m: Media, s: TrackState) {
-  if (m.kind === "audiobook") return s.progress ?? 0;
+  // Finished counts as 100% even when the app stopped at 99.6% (books finish at 99%).
+  if (m.kind === "audiobook") return s.status === "finished" ? 1 : (s.progress ?? 0);
   if (m.kind === "show") {
     const total = m.extra.airedEpisodes || m.extra.totalEpisodes || 0;
     return total ? Math.min(1, (s.watchedEpisodes?.length ?? 0) / total) : 0;
