@@ -3,7 +3,7 @@
 // rerun is fast and stores nothing new. Finished runs are kept in the imports table for the UI.
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { type Db, events, idMap, imports } from "../db.ts";
 import { appendEvents, eventsFor, type NewEvent, SAME_VIEWING } from "../events.ts";
 import type { Library } from "../library.ts";
@@ -250,23 +250,47 @@ export function createImports(db: Db, lib: Library, opts: { dataDir: string; fet
 
   /** Undoes an import: drops every event it added. The user's own entries and app syncs stay. */
   function remove(source: ImportSource) {
-    return db
+    const removed = db
       .delete(events)
       .where(eq(events.source, importSourceId(source)))
       .run().changes;
+    // Mark the runs so the Import page shows them as undone instead of offering Undo again.
+    db.update(imports)
+      .set({ undoneAt: Date.now() })
+      .where(and(eq(imports.source, source), isNull(imports.undoneAt)))
+      .run();
+    return removed;
+  }
+
+  /** Services whose imported entries are all gone (undone, including before runs were marked). */
+  function emptySources() {
+    return new Set(
+      (Object.keys(IMPORT_SOURCES) as ImportSource[]).filter(
+        (s) =>
+          !db
+            .select({ id: events.id })
+            .from(events)
+            .where(eq(events.source, importSourceId(s)))
+            .limit(1)
+            .get(),
+      ),
+    );
   }
 
   function history() {
+    const empty = emptySources();
     return db
       .select()
       .from(imports)
       .orderBy(desc(imports.startedAt))
       .limit(50)
       .all()
-      .map((r) => ({
-        ...r,
-        summary: JSON.parse(r.summary) as ImportSummary,
-      }));
+      .map((r) => {
+        const summary = JSON.parse(r.summary) as ImportSummary;
+        // Undone: marked when undone, or (older undos) nothing from that service is left.
+        const undone = Boolean(r.undoneAt) || (empty.has(r.source as ImportSource) && !r.error);
+        return { ...r, summary, undone };
+      });
   }
 
   return { start, job: (id: string) => jobs.get(id) ?? null, remove, history };

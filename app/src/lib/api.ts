@@ -1,5 +1,17 @@
 // Thin typed wrapper over the server's /api routes.
 export type MediaKind = "movie" | "show" | "audiobook";
+/** A library page: one kind, or Anime (anime movies and shows, which the Movies and Shows pages leave out). */
+export type Section = MediaKind | "anime";
+
+export type CalendarEntry = {
+  date: string; // YYYY-MM-DD
+  kind: "show" | "movie" | "audiobook";
+  key: string;
+  title: string;
+  label: string;
+  poster: string | null;
+  tracked: boolean; // false: a new movie in a franchise you watched, or a new book by an author you track
+};
 
 export type SearchResult = {
   key: string;
@@ -29,6 +41,10 @@ export type Media = Omit<SearchResult, "subtitle"> & {
     narrators?: string[];
     runtimeMin?: number | null;
     series?: { name: string; position: string | null } | null;
+    rating?: number | null; // out of 10 (TMDB, or AniList for anime); Audible out of 5
+    ratingSource?: "TMDB" | "AniList";
+    anime?: boolean;
+    tags?: string[]; // anime: AniList tags (Isekai, Shounen…); audiobooks: Audible's narrowest categories
   };
 };
 
@@ -143,8 +159,12 @@ export const api = {
   search: (kind: MediaKind, q: string) => call<SearchResult[]>(`/api/search?${new URLSearchParams({ kind, q })}`),
   media: (key: string) => call<{ media: Media; state: TrackState; events: EventRow[] }>(`/api/media/${key}`),
   season: (key: string, n: number) => call<Episode[]>(`/api/media/${key}/season/${n}`),
-  library: (kind?: MediaKind) =>
-    call<{ media: Media; state: TrackState }[]>(`/api/library${kind ? `?kind=${kind}` : ""}`),
+  /** A library section: movies, shows (anime left out), audiobooks, or anime (movies and shows). */
+  library: (section?: Section) =>
+    call<{ media: Media; state: TrackState }[]>(
+      `/api/library${section ? (section === "anime" ? "?section=anime" : `?kind=${section}`) : ""}`,
+    ),
+  calendar: (days = 60) => call<CalendarEntry[]>(`/api/calendar?days=${days}`),
   history: (limit = 100) =>
     call<
       {
@@ -222,6 +242,7 @@ export type ImportRun = {
   finishedAt: number;
   summary: ImportSummary;
   error: string | null;
+  undone: boolean;
 };
 
 export const kindLabel: Record<MediaKind, string> = { movie: "Movies", show: "Shows", audiobook: "Audiobooks" };
