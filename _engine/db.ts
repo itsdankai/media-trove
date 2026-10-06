@@ -67,7 +67,21 @@ export const artwork = sqliteTable("artwork", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// One row per finished one-time import (imports/runner.ts), shown on the Import page.
+export const imports = sqliteTable("imports", {
+  id: text("id").primaryKey(),
+  source: text("source").notNull(), // trakt, simkl, anilist, mal, letterboxd, imdb
+  label: text("label").notNull(), // file name or username
+  startedAt: integer("started_at").notNull(),
+  finishedAt: integer("finished_at").notNull(),
+  summary: text("summary").notNull(), // JSON ImportSummary
+  error: text("error"),
+});
+
 const ddl = `
+CREATE TABLE IF NOT EXISTS imports (
+  id TEXT PRIMARY KEY, source TEXT NOT NULL, label TEXT NOT NULL, started_at INTEGER NOT NULL,
+  finished_at INTEGER NOT NULL, summary TEXT NOT NULL, error TEXT);
 CREATE TABLE IF NOT EXISTS artwork (
   media_key TEXT NOT NULL, source TEXT NOT NULL, file TEXT NOT NULL, updated_at INTEGER NOT NULL,
   PRIMARY KEY (media_key, source));

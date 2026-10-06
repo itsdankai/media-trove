@@ -65,6 +65,12 @@ export function tmdbProvider(apiKey = process.env.TMDB_API_KEY, fetchFn: typeof 
       return hit ? makeKey("tmdb", ref.kind, hit.id) : null;
     },
 
+    async findEpisode(imdb) {
+      const r = await get(`/find/${imdb}`, { external_source: "imdb_id" });
+      const e = r.tv_episode_results?.[0];
+      return e ? { key: makeKey("tmdb", "show", e.show_id), season: e.season_number, episode: e.episode_number } : null;
+    },
+
     async search(kind, q) {
       const data = await get(`/search/${tmdbType(kind)}`, { query: q, include_adult: "false" });
       return (data.results as Json[]).slice(0, 20).map((r) => toResult(kind, r));
