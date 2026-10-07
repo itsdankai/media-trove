@@ -5,7 +5,7 @@ import { decrypt, encrypt } from "./crypto.ts";
 import { connections, openDb } from "./db.ts";
 import { appendEvents, eventsFor, type NewEvent, project } from "./events.ts";
 import { createLibrary } from "./library.ts";
-import type { MediaInfo, MetadataProvider } from "./metadata/types.ts";
+import { type MediaInfo, type MetadataProvider, ProviderUnavailable } from "./metadata/types.ts";
 import type { CatalogEntry, PluginHost } from "./plugins/host.ts";
 import { createSync } from "./sync.ts";
 
@@ -215,6 +215,29 @@ describe("sync engine", () => {
       token: "tok-123-refreshed",
     });
     expect((await sync.syncNow(conn.id)).added).toBe(0); // cursor advanced
+  });
+
+  it("without a TMDB key nothing is lost: the cursor waits until the key is added (bug 2026-10-07)", async () => {
+    const db = openDb(":memory:");
+    const host = fakeHost(pluginEvents);
+    let keySet = false;
+    const flaky: MetadataProvider = {
+      ...provider,
+      resolve: async (r) => {
+        if (!keySet) throw new ProviderUnavailable("TMDB_API_KEY is not set.");
+        return provider.resolve?.(r) ?? null;
+      },
+    };
+    const sync = createSync(db, createLibrary(db, [flaky]), host, Buffer.alloc(32, 1));
+    const conn = await sync.connect("fake", { password: "right" });
+
+    await expect(sync.syncNow(conn.id)).rejects.toThrow("TMDB_API_KEY is not set.");
+    const stored = db.select().from(connections).get();
+    expect(stored?.cursor).toBeNull();
+    expect(stored?.lastError).toContain("TMDB_API_KEY");
+
+    keySet = true;
+    expect(await sync.syncNow(conn.id)).toMatchObject({ received: 3, added: 2, unmatched: 1 });
   });
 
   it("history and item activity show the source name", async () => {

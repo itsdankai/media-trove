@@ -8,6 +8,7 @@ import { decrypt, encrypt } from "./crypto.ts";
 import { type ConnectionRow, connections, type Db, events, idMap, pushes } from "./db.ts";
 import { appendEvents, type NewEvent } from "./events.ts";
 import type { Library } from "./library.ts";
+import { ProviderUnavailable } from "./metadata/types.ts";
 import type { PluginHost } from "./plugins/host.ts";
 
 export type SyncSummary = { received: number; added: number; unmatched: number; refused: number; at: number };
@@ -104,7 +105,12 @@ export function createSync(
     const out: NewEvent[] = [];
     let unmatched = 0;
     for (const e of list) {
-      const mediaKey = await lib.resolve(e.media).catch(() => null);
+      // No usable metadata source (TMDB key missing or rejected): stop before the cursor moves, so the
+      // same items come again once it's fixed. The error shows on the connection in Settings.
+      const mediaKey = await lib.resolve(e.media).catch((err) => {
+        if (err instanceof ProviderUnavailable) throw err;
+        return null;
+      });
       if (!mediaKey) {
         unmatched++;
         continue;
