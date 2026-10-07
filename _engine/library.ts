@@ -17,7 +17,7 @@ import {
 
 const RETRY_MISS_MS = 24 * 60 * 60 * 1000;
 /** The metadata version providers write now (tmdb.ts / audible.ts META_VERSION). */
-const CURRENT_META = 3;
+const CURRENT_META = 4;
 /** Anime extras looked up with the current dataset rules (animedb.ts ANIME_DB_VERSION). */
 const animeDbCurrent = (extra: Record<string, unknown>) =>
   (extra.animeDb as { v?: number } | undefined)?.v === ANIME_DB_VERSION;

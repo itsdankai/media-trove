@@ -47,6 +47,21 @@ type Item = { media: { title: string; year: number | null; extra: Media["extra"]
 /** "The Matrix" sorts under M. */
 const sortTitle = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
 const length = (i: Item) => i.media.extra.runtimeMin ?? i.media.extra.runtime ?? null;
+/** The full release date where known, else the year (sorts the same way as a string). */
+const released = (i: Item) => i.media.extra.releaseDate ?? (i.media.year ? String(i.media.year) : null);
+/**
+ * The rating weighed by how many people gave it, so a 9.1 from a few hundred early fans doesn't beat an 8.5
+ * from 38,000: (votes × rating + m × typical) ÷ (votes + m). The anime community score has no count: as is.
+ */
+export function weighted(extra: Media["extra"]): number | null {
+  const r = extra.rating;
+  if (r == null) return null;
+  const audible = extra.ratingCount != null;
+  const n = audible ? extra.ratingCount : extra.ratingSource === "anime community" ? null : extra.voteCount;
+  if (n == null) return r;
+  const [m, typical] = audible ? [100, 4.3] : [1000, 6.5];
+  return (n * r + m * typical) / (n + m);
+}
 /** Compares two items; titles break ties, and missing values always go last. */
 function compare(key: SortKey, a: Item, b: Item): number {
   const byTitle = sortTitle(a.media.title).localeCompare(sortTitle(b.media.title), undefined, { numeric: true });
@@ -62,9 +77,9 @@ function compare(key: SortKey, a: Item, b: Item): number {
     case "za":
       return -byTitle;
     case "year":
-      return last(a.media.year, b.media.year, true);
+      return last(released(a), released(b), true);
     case "rating":
-      return last(a.media.extra.rating, b.media.extra.rating, true);
+      return last(weighted(a.media.extra), weighted(b.media.extra), true);
     case "author":
       return last(a.media.extra.authors?.[0], b.media.extra.authors?.[0], false);
     case "shortest":
