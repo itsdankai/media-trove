@@ -44,6 +44,9 @@ export type Media = Omit<SearchResult, "subtitle"> & {
     series?: { name: string; position: string | null } | null;
     rating?: number | null; // out of 10 (TMDB; for anime the averaged score from anime-offline-database); Audible out of 5
     ratingSource?: "TMDB" | "anime community";
+    voteCount?: number | null; // TMDB votes behind the rating
+    ratingCount?: number | null; // Audible: listeners who rated it
+    releaseDate?: string | null; // YYYY-MM-DD (movies, shows' first episode, audiobooks)
     anime?: boolean;
     tags?: string[]; // anime: Shounen, Isekai… (anime-offline-database); audiobooks: Audible's narrowest categories
   };

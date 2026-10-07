@@ -30,7 +30,7 @@ const domains: Record<string, string> = {
 };
 const groups = "contributors,media,product_attrs,product_desc,series,category_ladders,rating";
 /** Bumped when details gain fields; rows cached with an older version are fetched again (library.ts). */
-export const META_VERSION = 3;
+export const META_VERSION = 4; // 4: ratingCount (2026-10-07)
 
 // biome-ignore lint/suspicious/noExplicitAny: Audible responses are loosely typed JSON
 type Json = any;
@@ -147,6 +147,7 @@ export function audibleProvider(
         releaseDate: p.release_date ?? null,
         language: p.language ?? null,
         rating: Number(p.rating?.overall_distribution?.display_average_rating) || null, // out of 5
+        ratingCount: Number(p.rating?.overall_distribution?.num_ratings) || null, // how many listeners rated it
         metaVersion: META_VERSION,
       },
     };
@@ -216,6 +217,16 @@ export function audibleProvider(
       const parts = await Promise.all(asins.map(product));
       const first = parts[0];
       const sum = parts.reduce((n, p) => n + ((p.extra.runtimeMin as number) ?? 0), 0);
+      // Every part's listener ratings together, not just part 1's.
+      const rated = parts.filter((p) => p.extra.rating && p.extra.ratingCount);
+      const ratingCount = rated.reduce((n, p) => n + (p.extra.ratingCount as number), 0);
+      const rating = ratingCount
+        ? Math.round(
+            (rated.reduce((n, p) => n + (p.extra.rating as number) * (p.extra.ratingCount as number), 0) /
+              ratingCount) *
+              10,
+          ) / 10
+        : first.extra.rating;
       return {
         ...first,
         key,
@@ -226,6 +237,8 @@ export function audibleProvider(
           narrators: [...new Set(parts.flatMap((p) => p.extra.narrators as string[]))],
           tags: [...new Set(parts.flatMap((p) => (p.extra.tags as string[]) ?? []))],
           runtimeMin: sum || null,
+          rating,
+          ratingCount: ratingCount || first.extra.ratingCount,
           parts: parts.length,
         },
       };

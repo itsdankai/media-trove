@@ -151,13 +151,24 @@ function metaLine(m: Media) {
       x.narrators?.length ? `Narrated by ${x.narrators.join(", ")}` : null,
       formatMinutes(x.runtimeMin),
       series,
+      ratingLine(m),
     ]
       .filter(Boolean)
       .join(" · ");
   }
   if (m.kind === "show")
-    return [m.year, x.seasons && `${x.seasons.length} seasons`, x.status].filter(Boolean).join(" · ");
-  return [m.year, formatMinutes(x.runtime)].filter(Boolean).join(" · ");
+    return [m.year, x.seasons && `${x.seasons.length} seasons`, x.status, ratingLine(m)].filter(Boolean).join(" · ");
+  return [m.year, formatMinutes(x.runtime), ratingLine(m)].filter(Boolean).join(" · ");
+}
+
+/** Where the rating comes from: "★ 8.5/10 TMDB (38,120 votes)", "★ 4.8/5 Audible (12,345 ratings)". */
+function ratingLine(m: Media) {
+  const x = m.extra;
+  if (x.rating == null) return null;
+  const n = (count?: number | null, word = "votes") => (count ? ` (${count.toLocaleString()} ${word})` : "");
+  if (m.kind === "audiobook") return `★ ${x.rating}/5 Audible listeners${n(x.ratingCount, "ratings")}`;
+  if (x.ratingSource === "anime community") return `★ ${x.rating}/10 anime community (MyAnimeList, AniList…)`;
+  return `★ ${x.rating}/10 TMDB${n(x.voteCount)}`;
 }
 
 function MovieActions({ state, track }: { m: Media; state: TrackState; track: Track }) {

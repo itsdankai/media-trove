@@ -20,7 +20,7 @@ const img = (path: string | null | undefined, size = "w342") =>
   path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 const tmdbType = (kind: MediaKind) => (kind === "movie" ? "movie" : "tv");
 /** Bumped when details gain fields; rows cached with an older version are fetched again (library.ts). */
-export const META_VERSION = 3;
+export const META_VERSION = 4; // 4: releaseDate and voteCount (2026-10-07)
 
 // biome-ignore lint/suspicious/noExplicitAny: TMDB responses are loosely typed JSON
 type Json = any;
@@ -100,6 +100,8 @@ export function tmdbProvider(apiKey = process.env.TMDB_API_KEY, fetchFn: typeof 
         tvdb: r.external_ids?.tvdb_id ?? null,
         // For filters and the Anime section (phase 7). Anime = animated and originally Japanese.
         rating: typeof r.vote_average === "number" && r.vote_count > 0 ? Math.round(r.vote_average * 10) / 10 : null,
+        voteCount: typeof r.vote_count === "number" ? r.vote_count : null, // weighs the rating when sorting by it
+        releaseDate: (r.release_date || r.first_air_date || null) as string | null, // "Newest release" sorts by this
         originalLanguage: r.original_language ?? null,
         anime: genres.includes("Animation") && r.original_language === "ja",
         metaVersion: META_VERSION,

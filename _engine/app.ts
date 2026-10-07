@@ -162,11 +162,24 @@ export function createApp(
         const rpdbKey = process.env.RPDB_API_KEY;
         const m = /^tmdb-(movie|show)-(\d+)$/.exec(c.req.param("key"));
         if (!rpdbKey || !m) return c.notFound();
-        const id = `${m[1] === "movie" ? "movie" : "series"}-${m[2]}`;
-        const res = await fetch(
-          `https://api.ratingposterdb.com/${encodeURIComponent(rpdbKey)}/tmdb/poster-default/${id}.jpg`,
-        ).catch(() => null);
-        if (!res?.ok || !res.headers.get("content-type")?.startsWith("image/")) return c.notFound();
+        const base = `https://api.ratingposterdb.com/${encodeURIComponent(rpdbKey)}`;
+        const ok = (r: Response | null) => Boolean(r?.ok && r.headers.get("content-type")?.startsWith("image/"));
+        let res = await fetch(`${base}/tmdb/poster-default/${m[1] === "movie" ? "movie" : "series"}-${m[2]}.jpg`).catch(
+          () => null,
+        );
+        // RPDB doesn't always know a new title by its TMDB id but does by IMDb's (The Uprising, 2026-10-07).
+        const imdb = ok(res)
+          ? null
+          : (
+              db
+                .select()
+                .from(media)
+                .where(eq(media.key, c.req.param("key")))
+                .get()?.extra as { imdb?: string } | null
+            )?.imdb;
+        if (imdb && /^tt\d+$/.test(imdb))
+          res = await fetch(`${base}/imdb/poster-default/${imdb}.jpg`).catch(() => null);
+        if (!res || !ok(res)) return c.notFound();
         return c.body(await res.arrayBuffer(), 200, {
           "content-type": res.headers.get("content-type") ?? "image/jpeg",
           "cache-control": "public, max-age=604800",
