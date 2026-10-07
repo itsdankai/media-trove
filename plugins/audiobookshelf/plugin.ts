@@ -19,10 +19,10 @@ export const manifest: Manifest = {
         key: "apiKey",
         label: "Or an API key",
         type: "password",
-        help: "Instead of username and password: an ABS API key (Settings → Users → API Keys) made for a non-admin user.",
+        help: "Instead of username and password: an ABS API key (Settings → Users → API Keys) made for a User account.",
       },
     ],
-    note: "A regular (non-admin) account is enough. MediaTrove only reads your progress.",
+    note: "Use an account whose type is User, never Admin or Root (check in ABS under Settings → Users). MediaTrove only reads your progress, but keeps a login token; a User token can't change your server. See the README if you listen on an Admin or Root account.",
   },
   sync: { intervalSeconds: 300 },
 };
