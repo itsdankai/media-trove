@@ -46,6 +46,7 @@ All optional except the TMDB key. Put them in `.env` and run `docker compose up 
 |---|---|
 | `TMDB_API_KEY` | Movie and show data. Required. The v3 "API Key" or the v4 "Read Access Token" both work. |
 | `MEDIATROVE_PASSWORD` | Asks for this password before showing anything (any username works). **Set it whenever MediaTrove is reachable by anyone but you**, and put HTTPS in front of it (a reverse proxy) if it's reachable from the internet. |
+| `RPDB_API_KEY` | Rating posters for movies and shows: the poster with IMDb and Rotten Tomatoes scores drawn on it, from [RPDB](https://ratingposterdb.com). Anime shows its community score (MyAnimeList, AniList and others) without a key. Switch both off in Settings → Display. |
 | `AUDIBLE_REGION` | Which Audible store to search for audiobooks: us, uk, ca, au, de, fr, it, es, in, jp. Default us. |
 | `SIMKL_CLIENT_ID` | For the Simkl import, so the form doesn't ask for it (a free app from simkl.com/settings/developer). |
 | `RESEND_API_KEY`, `MEDIATROVE_BACKUP_EMAIL_TO`, `MEDIATROVE_BACKUP_EMAIL_FROM` | Email the weekly backup through [Resend](https://resend.com) (free tier: 3,000 emails a month). The sender must be on a domain you've verified with Resend. |

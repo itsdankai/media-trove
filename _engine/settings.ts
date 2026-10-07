@@ -11,9 +11,16 @@ export type Settings = {
    * season was 9 months away).
    */
   caughtUpDays: number;
+  /** Posters with scores drawn on: RPDB for movies and shows (needs RPDB_API_KEY), the community score for anime. */
+  ratingPosters: boolean;
 };
 
-const defaults: Settings = { watchedThreshold: DEFAULT_THRESHOLD, setupComplete: false, caughtUpDays: 90 };
+const defaults: Settings = {
+  watchedThreshold: DEFAULT_THRESHOLD,
+  setupComplete: false,
+  caughtUpDays: 90,
+  ratingPosters: true,
+};
 
 export function getSettings(db: Db): Settings {
   const rows = db.select().from(settings).all();

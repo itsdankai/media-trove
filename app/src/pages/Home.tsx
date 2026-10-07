@@ -52,6 +52,7 @@ export function Home() {
               kind={media.kind}
               title={media.title}
               poster={media.poster}
+              rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
               badge={statusLabel[state.status]}
               sub={media.year ? String(media.year) : null}
               progress={completion(media, state)}
@@ -69,6 +70,7 @@ export function Home() {
               kind={media.kind}
               title={media.title}
               poster={media.poster}
+              rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
               sub={media.year ? String(media.year) : null}
             />
           ))}

@@ -76,7 +76,12 @@ export type NewEvent = Pick<EventRow, "mediaKey" | "kind"> & {
   progress?: number;
 };
 
-export type Settings = { watchedThreshold: number; setupComplete: boolean; caughtUpDays: number }; // caughtUpDays 0 = any time
+export type Settings = {
+  watchedThreshold: number;
+  setupComplete: boolean;
+  caughtUpDays: number; // 0 = any time
+  ratingPosters: boolean; // RPDB posters for movies/shows (when the server has RPDB_API_KEY), score bar for anime
+};
 
 export type Field = {
   key: string;
@@ -156,7 +161,7 @@ function send<T>(method: string, path: string, body?: unknown) {
 }
 
 export const api = {
-  config: () => call<{ tmdb: boolean; plugins: boolean }>("/api/config"),
+  config: () => call<{ tmdb: boolean; plugins: boolean; rpdb: boolean }>("/api/config"),
   search: (kind: MediaKind, q: string) => call<SearchResult[]>(`/api/search?${new URLSearchParams({ kind, q })}`),
   media: (key: string) => call<{ media: Media; state: TrackState; events: EventRow[] }>(`/api/media/${key}`),
   season: (key: string, n: number) => call<Episode[]>(`/api/media/${key}/season/${n}`),

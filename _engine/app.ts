@@ -148,7 +148,30 @@ export function createApp(
         }
       })
 
-      .get("/api/config", (c) => c.json({ tmdb: Boolean(process.env.TMDB_API_KEY), plugins: Boolean(plugins) }))
+      .get("/api/config", (c) =>
+        c.json({
+          tmdb: Boolean(process.env.TMDB_API_KEY),
+          plugins: Boolean(plugins),
+          rpdb: Boolean(process.env.RPDB_API_KEY),
+        }),
+      )
+
+      // Rating posters (RPDB): the poster with IMDb / Rotten Tomatoes scores drawn on it. Fetched here so
+      // the key never reaches the browser; the browser keeps each one for a week.
+      .get("/api/poster/:key", async (c) => {
+        const rpdbKey = process.env.RPDB_API_KEY;
+        const m = /^tmdb-(movie|show)-(\d+)$/.exec(c.req.param("key"));
+        if (!rpdbKey || !m) return c.notFound();
+        const id = `${m[1] === "movie" ? "movie" : "series"}-${m[2]}`;
+        const res = await fetch(
+          `https://api.ratingposterdb.com/${encodeURIComponent(rpdbKey)}/tmdb/poster-default/${id}.jpg`,
+        ).catch(() => null);
+        if (!res?.ok || !res.headers.get("content-type")?.startsWith("image/")) return c.notFound();
+        return c.body(await res.arrayBuffer(), 200, {
+          "content-type": res.headers.get("content-type") ?? "image/jpeg",
+          "cache-control": "public, max-age=604800",
+        });
+      })
 
       // --- settings -------------------------------------------------------------------------
       .get("/api/settings", (c) => c.json(getSettings(db)))
@@ -161,6 +184,7 @@ export function createApp(
             watchedThreshold: z.number().min(0.5).max(1).optional(),
             setupComplete: z.boolean().optional(),
             caughtUpDays: z.number().int().min(0).max(730).optional(), // 0 = any time
+            ratingPosters: z.boolean().optional(),
           }),
         ),
         (c) => c.json(updateSettings(db, c.req.valid("json"))),

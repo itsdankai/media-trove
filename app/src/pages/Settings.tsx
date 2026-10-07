@@ -47,6 +47,8 @@ export function Settings() {
         </Card>
       </section>
 
+      {settings && <Display ratingPosters={settings.ratingPosters} />}
+
       <Connections />
 
       <Backups />
@@ -96,6 +98,41 @@ function CaughtUpWindow({ days }: { days: number }) {
         until the date gets close.
       </p>
     </div>
+  );
+}
+
+/** Rating posters: RPDB for movies and shows (when the server has RPDB_API_KEY), the community score for anime. */
+function Display({ ratingPosters }: { ratingPosters: boolean }) {
+  const qc = useQueryClient();
+  const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.config });
+  const save = useMutation({
+    mutationFn: (on: boolean) => api.saveSettings({ ratingPosters: on }),
+    onSuccess: (s) => qc.setQueryData(["settings"], s),
+  });
+  return (
+    <section className="space-y-4">
+      <h2 className="text-lg font-medium">Display</h2>
+      <Card className="p-5">
+        <label htmlFor="rating-posters" className="flex items-center gap-3 text-sm">
+          <Switch
+            id="rating-posters"
+            checked={ratingPosters}
+            onCheckedChange={(on) => save.mutate(on)}
+            disabled={save.isPending}
+            aria-label="Rating posters"
+          />
+          <span>
+            Rating posters
+            <span className="block text-xs text-muted-foreground">
+              {config?.rpdb
+                ? "Movies and shows use RPDB posters with IMDb and Rotten Tomatoes scores on them. "
+                : "Movies and shows: add RPDB_API_KEY to the server's .env for posters with IMDb and Rotten Tomatoes scores. "}
+              Anime shows its community score (MyAnimeList, AniList and others).
+            </span>
+          </span>
+        </label>
+      </Card>
+    </section>
   );
 }
 

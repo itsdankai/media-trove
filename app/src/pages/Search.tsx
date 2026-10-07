@@ -47,6 +47,7 @@ function Section({ kind, q }: { kind: MediaKind; q: string }) {
               kind={r.kind}
               title={r.title}
               poster={r.poster}
+              rated={{ mediaKey: r.key }}
               sub={[r.subtitle, r.year].filter(Boolean).join(" · ")}
             />
           ))}
