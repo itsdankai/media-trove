@@ -1,12 +1,12 @@
 // Backups of the library: every title and every event (what was watched, when, from where), plus
-// settings, as one JSON file. Connections are left out on purpose: their credentials are encrypted with
+// the watchlist and settings, as one JSON file. Connections are left out on purpose: their credentials are encrypted with
 // this install's key and would be useless (and sensitive) anywhere else; reconnect apps after a restore.
 //
 // Restoring adds the backup's events through appendEvents, whose ids are content hashes, so restoring
 // the same backup twice, or into a library that already has some of it, adds nothing twice.
 import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Db, events, media, settings } from "./db.ts";
+import { type Db, events, media, settings, watchlist } from "./db.ts";
 import { appendEvents, type NewEvent } from "./events.ts";
 
 export const BACKUP_FORMAT = "mediatrove-backup";
@@ -20,6 +20,7 @@ export function exportAll(db: Db) {
     exportedAt: new Date().toISOString(),
     settings: db.select().from(settings).all(),
     media: db.select().from(media).all(),
+    watchlist: db.select().from(watchlist).all(),
     events: db
       .select()
       .from(events)
@@ -38,6 +39,8 @@ export function restore(db: Db, data: unknown) {
   if (b?.format !== BACKUP_FORMAT || !Array.isArray(b.events) || !Array.isArray(b.media))
     throw new BackupError("That file isn't a MediaTrove backup.");
   for (const m of b.media) db.insert(media).values(m).onConflictDoNothing().run();
+  // Backups from before the watchlist (2026-10-07) don't have one.
+  for (const w of b.watchlist ?? []) db.insert(watchlist).values(w).onConflictDoNothing().run();
   const list: NewEvent[] = b.events.map((e) => ({
     mediaKey: e.mediaKey,
     kind: e.kind as NewEvent["kind"],

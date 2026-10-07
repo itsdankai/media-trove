@@ -15,10 +15,10 @@ import {
 } from "@/lib/api";
 
 const statuses: Record<Section, TrackState["status"][]> = {
-  movie: ["watching", "completed"],
-  show: ["watching", "caught_up", "completed"],
-  anime: ["watching", "caught_up", "completed"],
-  audiobook: ["listening", "finished"],
+  movie: ["watching", "completed", "planned"],
+  show: ["watching", "caught_up", "completed", "planned"],
+  anime: ["watching", "caught_up", "completed", "planned"],
+  audiobook: ["listening", "finished", "planned"],
 };
 
 const title: Record<Section, string> = { ...kindLabel, anime: "Anime" };
@@ -43,7 +43,14 @@ const sortOptions: Record<Section, SortKey[]> = {
   anime: ["recent", "az", "za", "year", "rating"],
   audiobook: ["recent", "az", "za", "author", "shortest", "longest", "year", "rating"],
 };
-type Item = { media: { title: string; year: number | null; extra: Media["extra"] }; state: TrackState };
+type Item = {
+  media: { title: string; year: number | null; extra: Media["extra"] };
+  state: TrackState;
+  watchlistedAt?: number | null;
+};
+/** Last activity, or for a watchlist title not started yet, when it was saved. */
+const lastTouched = (i: Item) =>
+  i.state.lastActivityAt ?? (i.watchlistedAt ? new Date(i.watchlistedAt).toISOString() : null);
 /** "The Matrix" sorts under M. */
 const sortTitle = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
 const length = (i: Item) => i.media.extra.runtimeMin ?? i.media.extra.runtime ?? null;
@@ -87,7 +94,7 @@ function compare(key: SortKey, a: Item, b: Item): number {
     case "longest":
       return last(length(a), length(b), true);
     default:
-      return last(a.state.lastActivityAt, b.state.lastActivityAt, true);
+      return last(lastTouched(a), lastTouched(b), true);
   }
 }
 
@@ -140,7 +147,8 @@ export function Library({ section }: { section: Section }) {
   const items = all
     .filter(
       ({ media, state }) =>
-        (f.status === "all" || state.status === f.status) &&
+        // "All" is everything you've started; titles only saved for later are on the Watchlist tab.
+        (f.status === "all" ? state.status !== "planned" : state.status === f.status) &&
         (f.type === "all" || media.kind === f.type) &&
         (!f.genre || media.genres.includes(f.genre)) &&
         (!f.decade || (media.year != null && Math.floor(media.year / 10) * 10 === Number(f.decade))) &&
@@ -148,6 +156,7 @@ export function Library({ section }: { section: Section }) {
         (!f.tag || (media.extra.tags ?? []).includes(f.tag)),
     )
     .sort((a, b) => compare(sort, a, b));
+  const tracked = all.filter((i) => i.state.status !== "planned").length;
   const filtered = Boolean(f.genre || f.decade || f.rating || f.tag || f.type !== "all" || f.status !== "all");
 
   return (
@@ -156,7 +165,13 @@ export function Library({ section }: { section: Section }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{title[section]}</h1>
           <p className="text-sm text-muted-foreground">
-            {data ? (filtered ? `${items.length} of ${all.length} tracked` : `${all.length} tracked`) : " "}
+            {!data
+              ? " "
+              : f.status === "planned"
+                ? `${items.length} on your watchlist`
+                : filtered
+                  ? `${items.length} of ${tracked} tracked`
+                  : `${tracked} tracked`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -253,7 +268,9 @@ export function Library({ section }: { section: Section }) {
       )}
       {!isLoading && all.length > 0 && items.length === 0 && (
         <p className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-          Nothing matches these filters.
+          {f.status === "planned" && !filtered
+            ? "Your watchlist is empty. Open any title (search for it above) and press Add to watchlist."
+            : "Nothing matches these filters."}
         </p>
       )}
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowLeft, Check, CheckCheck, Eye, RotateCcw } from "lucide-react";
+import { ArrowLeft, BookmarkCheck, BookmarkPlus, Check, CheckCheck, Eye, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { Poster } from "@/components/PosterCard";
@@ -64,8 +64,10 @@ export function Detail() {
               <h1 className="text-3xl font-semibold tracking-tight">{m.title}</h1>
               <p className="mt-1 text-muted-foreground">{metaLine(m)}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge>{statusLabel[state.status]}</Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>
+                {state.status === "planned" && !data.watchlisted ? "Not tracked" : statusLabel[state.status]}
+              </Badge>
               {m.genres.map((g) => (
                 <Badge key={g} variant="secondary">
                   {g}
@@ -73,6 +75,8 @@ export function Detail() {
               ))}
             </div>
             {m.overview && <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{m.overview}</p>}
+            {/* Once anything is watched or listened to, the title leaves the watchlist on its own. */}
+            {state.status === "planned" && <WatchlistButton mediaKey={m.key} on={data.watchlisted} />}
             {m.kind === "movie" && <MovieActions m={m} state={state} track={track} />}
             {m.kind === "audiobook" && <AudiobookActions m={m} state={state} track={track} />}
             {m.kind === "show" && <ShowSummary m={m} state={state} />}
@@ -169,6 +173,23 @@ function ratingLine(m: Media) {
   if (m.kind === "audiobook") return `★ ${x.rating}/5 Audible listeners${n(x.ratingCount, "ratings")}`;
   if (x.ratingSource === "anime community") return `★ ${x.rating}/10 anime community (MyAnimeList, AniList…)`;
   return `★ ${x.rating}/10 TMDB${n(x.voteCount)}`;
+}
+
+/** Save a title for later, or take it off the list. */
+function WatchlistButton({ mediaKey, on }: { mediaKey: string; on: boolean }) {
+  const qc = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: () => api.watchlist(mediaKey, !on),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["media", mediaKey] });
+      qc.invalidateQueries({ queryKey: ["library"] });
+    },
+  });
+  return (
+    <Button variant={on ? "secondary" : "default"} onClick={() => toggle.mutate()} disabled={toggle.isPending}>
+      {on ? <BookmarkCheck /> : <BookmarkPlus />} {on ? "On your watchlist" : "Add to watchlist"}
+    </Button>
+  );
 }
 
 function MovieActions({ state, track }: { m: Media; state: TrackState; track: Track }) {
