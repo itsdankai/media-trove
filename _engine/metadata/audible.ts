@@ -164,7 +164,22 @@ export function audibleProvider(
 
     async resolve(ref) {
       if (ref.kind !== "audiobook") return null;
-      if (ref.asin && /^[A-Z0-9]{10}$/i.test(ref.asin)) return makeKey("audible", "audiobook", ref.asin.toUpperCase());
+      const asinKey =
+        ref.asin && /^[A-Z0-9]{10}$/i.test(ref.asin) ? makeKey("audible", "audiobook", ref.asin.toUpperCase()) : null;
+      if (asinKey && !ref.title) return asinKey;
+      if (asinKey) {
+        // Trust the library's ASIN only when it agrees with the copy (builder's ABS, 2026-10-07): ABS's own
+        // match often picks "Part 1 of 2" for a merged GraphicAudio file, or the narrated edition for a
+        // dramatized one. On any disagreement, match by title instead, which handles both.
+        const p = (await get(`/${ref.asin?.toUpperCase()}`, {}).catch(() => null))?.product;
+        const py = p ? yearOf(p.release_date) : null;
+        const disagrees =
+          p?.title &&
+          ((editionHint(ref) && !isDramatized(p)) ||
+            (partOf(p.title) && !partOf(ref.title as string)) ||
+            (ref.year && py && Math.abs(ref.year - py) > 1));
+        if (!disagrees) return asinKey;
+      }
       if (!ref.title) return null;
       const search = async (extra: string) => {
         const q = [baseTitle(ref.title as string), ref.author, extra].filter(Boolean).join(" ");
@@ -177,7 +192,7 @@ export function audibleProvider(
         products = [...products, ...(await search("dramatized adaptation")).filter((p) => !seen.has(p.asin))];
       }
       const asins = pickEdition(ref, products);
-      return asins.length ? makeKey("audible", "audiobook", asins.join("+")) : null;
+      return asins.length ? makeKey("audible", "audiobook", asins.join("+")) : asinKey;
     },
 
     /** Books by an author not out yet (Audible lists pre-orders with their release date), in one language. */
