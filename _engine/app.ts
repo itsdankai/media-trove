@@ -7,7 +7,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { BackupError, exportAll, latestBackup, restore } from "./backup.ts";
 import { createCalendar } from "./calendar.ts";
-import { connections, type Db, events, type MediaRow, media } from "./db.ts";
+import { connections, type Db, events, type MediaRow, media, watchlist } from "./db.ts";
 import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
 import { fetchMal, parseMal } from "./imports/anime-lists.ts";
 import { parseImdb, parseLetterboxd } from "./imports/csv-exports.ts";
@@ -218,7 +218,23 @@ export function createApp(
           .slice()
           .reverse()
           .map((e) => ({ ...e, sourceName: names[e.source] ?? e.source }));
-        return c.json({ media: info, state: stateOf(info, list), events: withSource });
+        const saved = Boolean(db.select().from(watchlist).where(eq(watchlist.mediaKey, key)).get());
+        return c.json({ media: info, state: stateOf(info, list), events: withSource, watchlisted: saved });
+      })
+
+      // --- watchlist ------------------------------------------------------------------------
+      .put("/api/watchlist/:key", async (c) => {
+        const key = c.req.param("key");
+        await lib.ensureMedia(key);
+        db.insert(watchlist).values({ mediaKey: key, addedAt: Date.now() }).onConflictDoNothing().run();
+        return c.json({ watchlisted: true });
+      })
+
+      .delete("/api/watchlist/:key", (c) => {
+        db.delete(watchlist)
+          .where(eq(watchlist.mediaKey, c.req.param("key")))
+          .run();
+        return c.json({ watchlisted: false });
       })
 
       .get("/api/media/:key/season/:n", async (c) => {
@@ -257,11 +273,23 @@ export function createApp(
         zValidator("query", z.object({ kind: kindSchema.optional(), section: z.enum(["anime"]).optional() })),
         (c) => {
           const { kind, section } = c.req.valid("query");
-          const keys = db
-            .selectDistinct({ k: events.mediaKey })
-            .from(events)
-            .all()
-            .map((r) => r.k);
+          const saved = new Map(
+            db
+              .select()
+              .from(watchlist)
+              .all()
+              .map((w) => [w.mediaKey, w.addedAt]),
+          );
+          const keys = [
+            ...new Set([
+              ...db
+                .selectDistinct({ k: events.mediaKey })
+                .from(events)
+                .all()
+                .map((r) => r.k),
+              ...saved.keys(),
+            ]),
+          ];
           if (!keys.length) return c.json([]);
           const rows = db
             .select()
@@ -273,9 +301,14 @@ export function createApp(
                 ? m.kind !== "audiobook" && m.extra.anime === true
                 : (!kind || m.kind === kind) && !(kind && kind !== "audiobook" && m.extra.anime === true),
             );
-          // "planned" = nothing left (e.g. unmarked everywhere). There's no watchlist yet, so it isn't shown.
-          const items = rows.map((m) => ({ media: m, state: stateOf(m) })).filter((i) => i.state.status !== "planned");
-          items.sort((a, b) => (b.state.lastActivityAt ?? "").localeCompare(a.state.lastActivityAt ?? ""));
+          // "planned" = nothing watched yet. Shown only when it's on the watchlist (newest saved first, after
+          // everything with activity); otherwise it's a title unmarked everywhere, which stays hidden.
+          const items = rows
+            .map((m) => ({ media: m, state: stateOf(m), watchlistedAt: saved.get(m.key) ?? null }))
+            .filter((i) => i.state.status !== "planned" || i.watchlistedAt != null);
+          const when = (i: (typeof items)[number]) =>
+            i.state.lastActivityAt ?? (i.watchlistedAt ? new Date(i.watchlistedAt).toISOString() : "");
+          items.sort((a, b) => when(b).localeCompare(when(a)));
           return c.json(items);
         },
       )

@@ -137,3 +137,32 @@ describe("api", () => {
     expect(lib).toHaveLength(1);
   });
 });
+
+describe("watchlist (2026-10-07)", () => {
+  type Lib = { media: { key: string }; state: { status: string }; watchlistedAt: number | null }[];
+  const library = async (app: ReturnType<typeof setup>["app"]) =>
+    (await (await app.request("/api/library")).json()) as Lib;
+
+  it("a saved title shows as planned until it's started, then moves on by itself", async () => {
+    const { app } = setup();
+    expect((await app.request("/api/watchlist/tmdb-movie-603", { method: "PUT" })).status).toBe(200);
+    let lib = await library(app);
+    expect(lib).toHaveLength(1);
+    expect(lib[0]).toMatchObject({ state: { status: "planned" } });
+    expect(lib[0].watchlistedAt).toBeTypeOf("number");
+    expect(
+      ((await (await app.request("/api/media/tmdb-movie-603")).json()) as { watchlisted: boolean }).watchlisted,
+    ).toBe(true);
+
+    await post(app, { mediaKey: "tmdb-movie-603", kind: "watched" });
+    lib = await library(app);
+    expect(lib[0].state.status).toBe("completed");
+  });
+
+  it("removing it takes it off; a title never saved and never watched isn't listed", async () => {
+    const { app } = setup();
+    await app.request("/api/watchlist/tmdb-show-95396", { method: "PUT" });
+    await app.request("/api/watchlist/tmdb-show-95396", { method: "DELETE" });
+    expect(await library(app)).toHaveLength(0);
+  });
+});

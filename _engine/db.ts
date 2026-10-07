@@ -97,7 +97,15 @@ export const imports = sqliteTable("imports", {
   undoneAt: integer("undone_at"), // Undo removed what this service's imports added
 });
 
+// Titles saved for later (2026-10-07). Shown on the library's Watchlist tab while nothing of them has been
+// watched or listened to yet; starting one moves it to Watching on its own, so rows never need cleaning up.
+export const watchlist = sqliteTable("watchlist", {
+  mediaKey: text("media_key").primaryKey(),
+  addedAt: integer("added_at").notNull(),
+});
+
 const ddl = `
+CREATE TABLE IF NOT EXISTS watchlist (media_key TEXT PRIMARY KEY, added_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS pushes (
   connection_id TEXT NOT NULL, media_key TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
   action TEXT NOT NULL, at TEXT NOT NULL, status TEXT NOT NULL, pushed_at INTEGER NOT NULL,

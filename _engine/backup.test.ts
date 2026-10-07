@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { exportAll, restore, weeklyBackup } from "./backup.ts";
 import { emailBackup, emailConfigured } from "./backup-email.ts";
-import { connections, openDb } from "./db.ts";
+import { connections, openDb, watchlist } from "./db.ts";
 import { appendEvents, eventsFor, project } from "./events.ts";
 import { createLibrary } from "./library.ts";
 import type { MediaInfo, MetadataProvider } from "./metadata/types.ts";
@@ -96,5 +96,19 @@ describe("backups", () => {
       expect(written).not.toBeNull();
     }
     expect(readdirSync(join(dir, "backups"))).toHaveLength(8);
+  });
+});
+
+describe("backups keep the watchlist (2026-10-07)", () => {
+  it("exports it and restores it; older backups without one still restore", () => {
+    const db = openDb(":memory:");
+    db.insert(watchlist).values({ mediaKey: "tmdb-movie-603", addedAt: 1 }).run();
+    const backup = JSON.parse(JSON.stringify(exportAll(db)));
+    expect(backup.watchlist).toEqual([{ mediaKey: "tmdb-movie-603", addedAt: 1 }]);
+    const fresh = openDb(":memory:");
+    restore(fresh, backup);
+    expect(fresh.select().from(watchlist).all()).toHaveLength(1);
+    const { watchlist: _, ...old } = backup;
+    expect(() => restore(openDb(":memory:"), old)).not.toThrow();
   });
 });

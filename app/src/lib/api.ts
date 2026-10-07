@@ -166,11 +166,14 @@ function send<T>(method: string, path: string, body?: unknown) {
 export const api = {
   config: () => call<{ tmdb: boolean; plugins: boolean; rpdb: boolean }>("/api/config"),
   search: (kind: MediaKind, q: string) => call<SearchResult[]>(`/api/search?${new URLSearchParams({ kind, q })}`),
-  media: (key: string) => call<{ media: Media; state: TrackState; events: EventRow[] }>(`/api/media/${key}`),
+  media: (key: string) =>
+    call<{ media: Media; state: TrackState; events: EventRow[]; watchlisted: boolean }>(`/api/media/${key}`),
+  watchlist: (key: string, on: boolean) =>
+    send<{ watchlisted: boolean }>(on ? "PUT" : "DELETE", `/api/watchlist/${key}`),
   season: (key: string, n: number) => call<Episode[]>(`/api/media/${key}/season/${n}`),
   /** A library section: movies, shows (anime left out), audiobooks, or anime (movies and shows). */
   library: (section?: Section) =>
-    call<{ media: Media; state: TrackState }[]>(
+    call<{ media: Media; state: TrackState; watchlistedAt: number | null }[]>(
       `/api/library${section ? (section === "anime" ? "?section=anime" : `?kind=${section}`) : ""}`,
     ),
   calendar: (days = 60) => call<CalendarEntry[]>(`/api/calendar?days=${days}`),
@@ -265,7 +268,7 @@ export const kindLabel: Record<MediaKind, string> = { movie: "Movies", show: "Sh
 export const kindPath: Record<MediaKind, string> = { movie: "/movies", show: "/shows", audiobook: "/audiobooks" };
 
 export const statusLabel: Record<TrackState["status"], string> = {
-  planned: "Planned",
+  planned: "Watchlist",
   watching: "Watching",
   caught_up: "Caught up",
   completed: "Completed",

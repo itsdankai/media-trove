@@ -106,8 +106,19 @@ export function PosterCard({ to, kind, title, poster, sub, progress, badge, rate
   );
 }
 
-export function PosterGrid({ children }: { children: React.ReactNode }) {
+export function PosterGrid({ children, twoRows }: { children: React.ReactNode; twoRows?: boolean }) {
   return (
-    <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">{children}</div>
+    <div
+      className={cn(
+        "grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7",
+        // Home rows: never more than two rows, however many columns this screen width has (3, 4, 6 or 7).
+        // Hide from the 7th on, then each wider screen shows back only its own extra posters. Every "show"
+        // rule has a :not(), which makes it more specific than the "hide" rule wherever Tailwind puts it.
+        twoRows &&
+          "[&>*:nth-child(n+7)]:hidden sm:[&>*:nth-child(n+7):not(:nth-child(n+9))]:block lg:[&>*:nth-child(n+9):not(:nth-child(n+13))]:block xl:[&>*:nth-child(n+13):not(:nth-child(n+15))]:block",
+      )}
+    >
+      {children}
+    </div>
   );
 }
