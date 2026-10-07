@@ -22,8 +22,13 @@ curl -O https://raw.githubusercontent.com/itsdankai/media-trove/main/compose.yam
 curl -o .env https://raw.githubusercontent.com/itsdankai/media-trove/main/.env.example
 ```
 
-Open `.env` and set `TMDB_API_KEY` (free: themoviedb.org, then Settings, then API). If anyone but you
-can reach this machine, also set `MEDIATROVE_PASSWORD`. Then:
+Open `.env` and fill in:
+
+- `TMDB_API_KEY` (**required**, free: themoviedb.org, then Settings, then API). Without it, movies and shows can't be found or synced.
+- `MEDIATROVE_PASSWORD` if anyone but you can reach this machine.
+- `RPDB_API_KEY` (optional, from [ratingposterdb.com](https://ratingposterdb.com)) for posters with IMDb and Rotten Tomatoes scores on them.
+
+Then:
 
 ```sh
 docker compose up -d
@@ -63,6 +68,29 @@ your password. For apps that support it, choose how to keep them in sync:
 
 Anything already marked in the app comes into MediaTrove first. Turning sync on for an existing
 connection shows what it would add before it does anything, with an option to only send new marks.
+
+### Audiobookshelf: connect a basic User account, never Admin or Root
+
+MediaTrove keeps a login token for the account you connect. The plugin only reads, but if your
+MediaTrove server or its `data` folder were ever stolen, an Admin or Root token would let someone
+change or delete your whole Audiobookshelf server. A **User** account can only see its own progress.
+Better safe than sorry: **only connect an account whose type is User.**
+
+Check the type in Audiobookshelf under **Settings → Users**. Then:
+
+- **You listen on a User account:** connect that one. Done.
+- **You listen on an Admin account:** sign in as Root (or another Admin), open **Settings → Users**, edit your account,
+  set **Account type** to **User**, save, and connect it.
+- **You listen on the Root account** (the first account made on the server): Root can't be changed to
+  a User, and Audiobookshelf can't move listening progress between accounts. Do this instead:
+  1. In Audiobookshelf, make a new **User** account for listening from now on.
+  2. Optional, to keep your past listening in MediaTrove: connect the Root account once, wait for the
+     first sync to finish (Settings → Connected apps shows it), then press **Disconnect**. MediaTrove
+     deletes its Root token but keeps the history it brought in.
+  3. Connect the new User account and listen on it from now on. Books you were partway through start
+     at the beginning on the new account, so skip ahead in the player (or finish them first).
+
+An Audiobookshelf **API key** works too, as long as it was made for a User account.
 
 ## Imports
 
