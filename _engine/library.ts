@@ -113,9 +113,10 @@ export function createLibrary(
         : r.tvdb
           ? `tvdb:${r.tvdb}`
           : r.asin
-            ? `asin:${r.asin}`
+            ? `asin2:${r.asin}|${(r.title ?? "").toLowerCase()}`
             : null;
     // "title2": title refs from before edition matching (2026-10-05) are ignored and looked up again.
+    // "asin2": since 2026-10-07 an ASIN is checked against the title (audible.ts), so the title is part of the ref.
     const lc = (s?: string) => (s ?? "").toLowerCase();
     const byTitle = `title2:${lc(r.title)}|${lc(r.author)}|${r.year ?? ""}|${lc(r.publisher)}|${lc(r.narrator)}`;
     return `${r.kind}:${id ?? byTitle}`;

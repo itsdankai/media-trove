@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { baseTitle, partOf, pickEdition } from "./audible.ts";
+import { audibleProvider, baseTitle, partOf, pickEdition } from "./audible.ts";
 
 // Shaped like real Audible results for these searches (checked 2026-10-05).
 const products = [
@@ -93,5 +93,48 @@ describe("audible edition matching", () => {
 
   it("a dramatized copy with no dramatized edition on Audible stays unmatched rather than wrong", () => {
     expect(pickEdition({ title: "Morning Star [Dramatized Adaptation]" }, [products[0]])).toEqual([]);
+  });
+});
+
+describe("the library's own ASIN (builder's ABS after its Audible match, 2026-10-07)", () => {
+  const catalog = [
+    { asin: "B00I2VWW5U", title: "Red Rising", publisher_name: "Recorded Books", release_date: "2014-01-28" },
+    {
+      asin: "B0BVGTFDWN",
+      title: "Red Rising (Part 1 of 2) (Dramatized Adaptation)",
+      publisher_name: "Graphic Audio LLC",
+      release_date: "2023-04-03",
+    },
+    {
+      asin: "B0C4LSXHPG",
+      title: "Red Rising (Part 2 of 2) (Dramatized Adaptation)",
+      publisher_name: "Graphic Audio LLC",
+      release_date: "2023-05-17",
+    },
+  ];
+  // One product by ASIN (/products/<ASIN>), else a search returning the whole catalog.
+  const fakeFetch = (async (url: string) => {
+    const asin = new URL(url).pathname.split("/").pop() ?? "";
+    const p = catalog.find((x) => x.asin === asin);
+    return Response.json(p ? { product: p } : { products: catalog });
+  }) as typeof fetch;
+  const resolve = (ref: object) => audibleProvider("us", fakeFetch).resolve?.({ kind: "audiobook", ...ref } as never);
+
+  it("an ASIN for one part of a merged GraphicAudio copy becomes the merged book", async () => {
+    expect(await resolve({ title: "Red Rising: [Dramatized Adaptation]", asin: "B0BVGTFDWN", year: 2023 })).toBe(
+      "audible-audiobook-B0BVGTFDWN+B0C4LSXHPG",
+    );
+  });
+
+  it("a narrated-edition ASIN on a 2023 copy is the GraphicAudio one (the year disagrees)", async () => {
+    const ref = { title: "Red Rising", asin: "B00I2VWW5U", year: 2023, narrator: "Tim Gerard Reynolds" };
+    expect(await resolve(ref)).toBe("audible-audiobook-B0BVGTFDWN+B0C4LSXHPG");
+  });
+
+  it("an ASIN that agrees is used as is", async () => {
+    expect(await resolve({ title: "Red Rising", asin: "B00I2VWW5U", year: 2014 })).toBe("audible-audiobook-B00I2VWW5U");
+    expect(await resolve({ title: "Red Rising (Part 2 of 2)", asin: "B0C4LSXHPG", year: 2023 })).toBe(
+      "audible-audiobook-B0C4LSXHPG",
+    );
   });
 });
