@@ -1,3 +1,5 @@
+<p align="center"><img src="app/public/assets/logo.png" alt="MediaTrove logo" width="160" /></p>
+
 # MediaTrove
 
 A self-hosted tracker for everything you watch and listen to: movies, TV shows, anime and

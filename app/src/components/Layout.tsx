@@ -4,7 +4,6 @@ import {
   CalendarDays,
   Clapperboard,
   FileUp,
-  Gem,
   Headphones,
   History,
   House,
@@ -58,7 +57,7 @@ export function Layout() {
           className="mb-5 flex items-center gap-2 rounded-lg px-2 pb-1 pt-1 hover:opacity-90"
           aria-label="MediaTrove home"
         >
-          <Gem className="size-6 text-primary" />
+          <img src="/assets/icon.png" alt="" className="size-7" />
           <span className="text-lg font-semibold tracking-tight">MediaTrove</span>
         </Link>
         {[...nav, ...navMore].map(({ to, label, icon: Icon, end }, i) => (
