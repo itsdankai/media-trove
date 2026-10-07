@@ -3,7 +3,16 @@ import { X } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, completion, kindLabel, type MediaKind, type Section, statusLabel, type TrackState } from "@/lib/api";
+import {
+  api,
+  completion,
+  kindLabel,
+  type Media,
+  type MediaKind,
+  type Section,
+  statusLabel,
+  type TrackState,
+} from "@/lib/api";
 
 const statuses: Record<Section, TrackState["status"][]> = {
   movie: ["watching", "completed"],
@@ -16,6 +25,57 @@ const title: Record<Section, string> = { ...kindLabel, anime: "Anime" };
 
 /** Minimum ratings that can be offered: out of 10 (TMDB; for anime, the community score), Audible out of 5. */
 const ratingSteps = (section: Section) => (section === "audiobook" ? [3.5, 4, 4.5] : [6, 7, 8, 9]);
+/** Sort options per section. "recent" (last activity) is the default; audiobooks add author and length, movies add runtime. */
+type SortKey = "recent" | "az" | "za" | "year" | "rating" | "author" | "shortest" | "longest";
+const sortLabel: Record<SortKey, string> = {
+  recent: "Most recent",
+  az: "Title A–Z",
+  za: "Title Z–A",
+  year: "Newest release",
+  rating: "Highest rated",
+  author: "Author A–Z",
+  shortest: "Shortest",
+  longest: "Longest",
+};
+const sortOptions: Record<Section, SortKey[]> = {
+  movie: ["recent", "az", "za", "year", "rating", "shortest", "longest"],
+  show: ["recent", "az", "za", "year", "rating"],
+  anime: ["recent", "az", "za", "year", "rating"],
+  audiobook: ["recent", "az", "za", "author", "shortest", "longest", "year", "rating"],
+};
+type Item = { media: { title: string; year: number | null; extra: Media["extra"] }; state: TrackState };
+/** "The Matrix" sorts under M. */
+const sortTitle = (t: string) => t.replace(/^(the|a|an)\s+/i, "");
+const length = (i: Item) => i.media.extra.runtimeMin ?? i.media.extra.runtime ?? null;
+/** Compares two items; titles break ties, and missing values always go last. */
+function compare(key: SortKey, a: Item, b: Item): number {
+  const byTitle = sortTitle(a.media.title).localeCompare(sortTitle(b.media.title), undefined, { numeric: true });
+  const last = (x: number | string | null | undefined, y: number | string | null | undefined, desc: boolean) => {
+    if (x == null || x === "") return y == null || y === "" ? byTitle : 1;
+    if (y == null || y === "") return -1;
+    const d = typeof x === "string" ? x.localeCompare(String(y)) : x - (y as number);
+    return (desc ? -d : d) || byTitle;
+  };
+  switch (key) {
+    case "az":
+      return byTitle;
+    case "za":
+      return -byTitle;
+    case "year":
+      return last(a.media.year, b.media.year, true);
+    case "rating":
+      return last(a.media.extra.rating, b.media.extra.rating, true);
+    case "author":
+      return last(a.media.extra.authors?.[0], b.media.extra.authors?.[0], false);
+    case "shortest":
+      return last(length(a), length(b), false);
+    case "longest":
+      return last(length(a), length(b), true);
+    default:
+      return last(a.state.lastActivityAt, b.state.lastActivityAt, true);
+  }
+}
+
 const ratingSource: Record<Section, string> = {
   movie: "on TMDB",
   show: "on TMDB",
@@ -33,7 +93,9 @@ export function Library({ section }: { section: Section }) {
     decade: params.get("decade") ?? "",
     rating: params.get("rating") ?? "",
     tag: params.get("tag") ?? "", // anime and audiobooks: Isekai, Shounen… / Space Opera, LitRPG…
+    sort: params.get("sort") ?? "", // empty = most recent
   };
+  const sort: SortKey = sortOptions[section].includes(f.sort as SortKey) ? (f.sort as SortKey) : "recent";
   const set = (key: keyof typeof f, value: string) => {
     const next = new URLSearchParams(params);
     if (!value || value === "all") next.delete(key);
@@ -60,15 +122,17 @@ export function Library({ section }: { section: Section }) {
   // Only minimums that at least one title here reaches.
   const ratings = ratingSteps(section).filter((r) => all.some((i) => (i.media.extra.rating ?? 0) >= r));
 
-  const items = all.filter(
-    ({ media, state }) =>
-      (f.status === "all" || state.status === f.status) &&
-      (f.type === "all" || media.kind === f.type) &&
-      (!f.genre || media.genres.includes(f.genre)) &&
-      (!f.decade || (media.year != null && Math.floor(media.year / 10) * 10 === Number(f.decade))) &&
-      (!f.rating || (media.extra.rating ?? 0) >= Number(f.rating)) &&
-      (!f.tag || (media.extra.tags ?? []).includes(f.tag)),
-  );
+  const items = all
+    .filter(
+      ({ media, state }) =>
+        (f.status === "all" || state.status === f.status) &&
+        (f.type === "all" || media.kind === f.type) &&
+        (!f.genre || media.genres.includes(f.genre)) &&
+        (!f.decade || (media.year != null && Math.floor(media.year / 10) * 10 === Number(f.decade))) &&
+        (!f.rating || (media.extra.rating ?? 0) >= Number(f.rating)) &&
+        (!f.tag || (media.extra.tags ?? []).includes(f.tag)),
+    )
+    .sort((a, b) => compare(sort, a, b));
   const filtered = Boolean(f.genre || f.decade || f.rating || f.tag || f.type !== "all" || f.status !== "all");
 
   return (
@@ -137,10 +201,25 @@ export function Library({ section }: { section: Section }) {
               ))}
             </Filter>
           )}
+          <label className="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-sm sm:ml-auto">
+            <span className="text-muted-foreground">Sort</span>
+            <select
+              value={sort}
+              onChange={(e) => set("sort", e.target.value === "recent" ? "" : e.target.value)}
+              className="bg-transparent font-medium outline-none [&>option]:bg-card"
+              aria-label="Sort"
+            >
+              {sortOptions[section].map((k) => (
+                <option key={k} value={k}>
+                  {sortLabel[k]}
+                </option>
+              ))}
+            </select>
+          </label>
           {filtered && (
             <button
               type="button"
-              onClick={() => setParams({}, { replace: true })}
+              onClick={() => setParams(f.sort ? { sort: f.sort } : {}, { replace: true })}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
               <X className="size-3.5" /> Clear
@@ -171,6 +250,7 @@ export function Library({ section }: { section: Section }) {
             kind={media.kind}
             title={media.title}
             poster={media.poster}
+            rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
             sub={subline(media.kind, state, media.extra.subtitle ?? null, media.year)}
             progress={completion(media, state)}
             badge={state.status === "completed" || state.status === "finished" ? undefined : statusLabel[state.status]}

@@ -54,6 +54,7 @@ export function Detail() {
         <div className="flex flex-col gap-6 sm:flex-row">
           <Poster
             src={m.poster}
+            rated={{ mediaKey: m.key, anime: m.extra.anime, score: m.extra.rating }}
             kind={m.kind}
             title={m.title}
             className="w-40 shrink-0 shadow-2xl shadow-black/50 sm:w-52"

@@ -1,22 +1,45 @@
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
-import { Clapperboard, Headphones, Tv } from "lucide-react";
+import { Clapperboard, Headphones, Star, Tv } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router";
-import type { MediaKind } from "@/lib/api";
+import { api, type MediaKind } from "@/lib/api";
 
 const fallbackIcon = { movie: Clapperboard, show: Tv, audiobook: Headphones };
+
+/** What a poster needs to show a rating on it (Settings → Rating posters). */
+export type Rated = { mediaKey: string; anime?: boolean; score?: number | null };
+
+/** Whether rating posters are on, and whether the server can fetch RPDB ones. */
+function useRatingPosters() {
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings, staleTime: 60_000 });
+  const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: 300_000 });
+  return { on: settings?.ratingPosters ?? false, rpdb: config?.rpdb ?? false };
+}
 
 export function Poster({
   src,
   kind,
   title,
   className,
+  rated,
 }: {
   src: string | null;
   kind: MediaKind;
   title: string;
   className?: string;
+  rated?: Rated;
 }) {
   const Icon = fallbackIcon[kind];
+  const { on, rpdb } = useRatingPosters();
+  const [rpdbFailed, setRpdbFailed] = useState(false);
+  // Anime: RPDB only knows IMDb / Rotten Tomatoes, so draw the anime community score (MAL, AniList…) instead.
+  const animeScore = on && rated?.anime && rated.score ? rated.score : null;
+  const rpdbSrc =
+    on && rpdb && rated && !rated.anime && !rpdbFailed && /^tmdb-(movie|show)-\d+$/.test(rated.mediaKey)
+      ? `/api/poster/${rated.mediaKey}`
+      : null;
+  const shown = rpdbSrc ?? src;
   return (
     <div
       className={cn(
@@ -25,11 +48,24 @@ export function Poster({
         className,
       )}
     >
-      {src ? (
-        <img src={src} alt={title} loading="lazy" className="size-full object-cover" />
+      {shown ? (
+        <img
+          src={shown}
+          alt={title}
+          loading="lazy"
+          className="size-full object-cover"
+          onError={rpdbSrc ? () => setRpdbFailed(true) : undefined}
+        />
       ) : (
         <div className="grid size-full place-items-center text-muted-foreground">
           <Icon className="size-8" />
+        </div>
+      )}
+      {animeScore != null && (
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/75 py-1 text-xs font-semibold text-white">
+          <Star className="size-3 fill-amber-400 text-amber-400" />
+          {animeScore.toFixed(1)}
+          <span className="font-normal text-white/70">/10 anime</span>
         </div>
       )}
     </div>
@@ -44,15 +80,16 @@ type Props = {
   sub?: string | null;
   progress?: number;
   badge?: string;
+  rated?: Rated;
 };
 
-// Nothing is drawn on top of the artwork: the status and progress sit underneath it.
-export function PosterCard({ to, kind, title, poster, sub, progress, badge }: Props) {
+// Status and progress sit underneath the artwork; only a rating poster (Settings) draws on it.
+export function PosterCard({ to, kind, title, poster, sub, progress, badge, rated }: Props) {
   const showBar = progress != null && progress > 0 && progress < 1;
   return (
     <Link to={to} className="group block focus:outline-none">
       <div className="rounded-lg transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring">
-        <Poster src={poster} kind={kind} title={title} className="shadow-lg shadow-black/30" />
+        <Poster src={poster} kind={kind} title={title} rated={rated} className="shadow-lg shadow-black/30" />
       </div>
       <div className={cn("mt-1.5 h-1 overflow-hidden rounded-full bg-muted", !showBar && "invisible")}>
         <div className="h-full bg-primary" style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />
