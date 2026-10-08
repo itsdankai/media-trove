@@ -3,6 +3,7 @@ import { cn } from "cn";
 import { ArrowLeft, BookmarkCheck, BookmarkPlus, Check, CheckCheck, Eye, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
+import { Confirm } from "@/components/Confirm";
 import { Poster } from "@/components/PosterCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import {
   statusLabel,
   type TrackState,
 } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 import { describeGroup } from "./History.tsx";
 
 export function Detail() {
@@ -35,7 +37,7 @@ export function Detail() {
   const back = () => (location.key !== "default" ? navigate(-1) : navigate(kindPath[data?.media.kind ?? "movie"]));
 
   if (isLoading) return <Skeleton className="h-80 w-full" />;
-  if (error || !data) return <p className="text-muted-foreground">{error?.message ?? "Not found."}</p>;
+  if (error || !data) return <p className="text-muted-foreground">{error ? friendlyError(error) : "Not found."}</p>;
   const { media: m, state, events } = data;
 
   return (
@@ -65,7 +67,7 @@ export function Detail() {
               <p className="mt-1 text-muted-foreground">{metaLine(m)}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge>
+              <Badge variant="outline">
                 {state.status === "planned" && !data.watchlisted ? "Not tracked" : statusLabel[state.status]}
               </Badge>
               {m.genres.map((g) => (
@@ -192,7 +194,7 @@ function WatchlistButton({ mediaKey, on }: { mediaKey: string; on: boolean }) {
   );
 }
 
-function MovieActions({ state, track }: { m: Media; state: TrackState; track: Track }) {
+function MovieActions({ m, state, track }: { m: Media; state: TrackState; track: Track }) {
   const watched = (state.watchCount ?? 0) > 0;
   return (
     <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -202,14 +204,16 @@ function MovieActions({ state, track }: { m: Media; state: TrackState; track: Tr
       {watched && (
         <>
           <span className="text-sm text-muted-foreground">Watched {state.watchCount}×</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => track.mutate({ kind: "unwatched" })}
-            disabled={track.isPending}
+          <Confirm
+            title={`Reset ${m.title}?`}
+            description={`It goes back to not watched, and the count of ${state.watchCount} watch${state.watchCount === 1 ? "" : "es"} starts again from zero. Your History keeps the record.`}
+            action="Reset"
+            onConfirm={() => track.mutate({ kind: "unwatched" })}
           >
-            <RotateCcw /> Reset
-          </Button>
+            <Button variant="ghost" size="sm" disabled={track.isPending}>
+              <RotateCcw /> Reset
+            </Button>
+          </Confirm>
         </>
       )}
     </div>

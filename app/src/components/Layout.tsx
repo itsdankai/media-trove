@@ -8,6 +8,7 @@ import {
   Headphones,
   History,
   House,
+  Menu,
   Search as SearchIcon,
   Settings as SettingsIcon,
   Sparkles,
@@ -15,8 +16,9 @@ import {
   Tv,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { applyLook } from "@/lib/themes";
 
@@ -85,7 +87,7 @@ export function Layout() {
             {label}
           </NavLink>
         ))}
-        <div className="mt-auto space-y-1.5 px-2 text-[11px] leading-snug text-muted-foreground">
+        <div className="mt-auto space-y-1.5 px-2 text-xs leading-snug text-muted-foreground">
           {/* TMDB's terms ask for its logo and this notice, less prominent than our own branding. */}
           <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer" className="block w-fit">
             <img src="/tmdb.svg" alt="TMDB" className="h-2.5" />
@@ -119,20 +121,6 @@ export function Layout() {
                 aria-label="Search"
               />
             </form>
-            <Link
-              to="/marketplace"
-              className="rounded-lg p-2 text-muted-foreground hover:text-foreground md:hidden"
-              aria-label="Marketplace"
-            >
-              <Store className="size-5" />
-            </Link>
-            <Link
-              to="/settings"
-              className="rounded-lg p-2 text-muted-foreground hover:text-foreground md:hidden"
-              aria-label="Settings"
-            >
-              <SettingsIcon className="size-5" />
-            </Link>
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8">
@@ -140,21 +128,57 @@ export function Layout() {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-card/95 backdrop-blur md:hidden">
-        {nav.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              cn("flex flex-col items-center gap-1 py-2 text-[11px] text-muted-foreground", isActive && "text-primary")
-            }
-          >
-            <Icon className="size-5" />
-            {label}
-          </NavLink>
-        ))}
-      </nav>
+      <PhoneNav />
     </div>
+  );
+}
+
+const tab = "flex flex-col items-center gap-1 py-2 text-xs text-muted-foreground";
+
+/** Phone: one row of the first four pages, and "More" for the rest (critique 2026-10-08: eight tabs made two rows). */
+function PhoneNav() {
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  const rest = [...nav.slice(4), ...navMore];
+  const inRest = rest.some(({ to }) => pathname.startsWith(to));
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      {nav.slice(0, 4).map(({ to, label, icon: Icon, end }) => (
+        <NavLink key={to} to={to} end={end} className={({ isActive }) => cn(tab, isActive && "text-primary")}>
+          <Icon className="size-5" />
+          {label}
+        </NavLink>
+      ))}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger className={cn(tab, inRest && "text-primary")}>
+          <Menu className="size-5" />
+          More
+        </SheetTrigger>
+        <SheetContent side="bottom" className="rounded-t-xl pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+          <SheetHeader>
+            <SheetTitle>More</SheetTitle>
+          </SheetHeader>
+          <div className="grid grid-cols-3 gap-2 px-4">
+            {rest.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={() => setOpen(false)}
+                className={({ isActive }) =>
+                  cn(
+                    "flex flex-col items-center gap-1.5 rounded-lg py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground",
+                    isActive && "bg-accent text-foreground font-medium",
+                  )
+                }
+              >
+                <Icon className="size-5" />
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </nav>
   );
 }

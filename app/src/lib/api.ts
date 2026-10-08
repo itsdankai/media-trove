@@ -155,7 +155,11 @@ export type PluginStatus = {
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  // Validation failures send an object, not a string; those get a plain message instead of "[object Object]".
+  if (!res.ok) {
+    const msg = typeof body.error === "string" ? body.error : res.status === 400 ? "Check what you typed" : null;
+    throw new Error(msg ?? `Request failed (${res.status})`);
+  }
   return body as T;
 }
 

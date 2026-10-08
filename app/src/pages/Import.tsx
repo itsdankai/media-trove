@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, type ImportJob, type ImportSourceInfo, timeAgo } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 
 /** How to get each service's export, shown in its dialog. */
 const guide: Record<string, { blurb: string; steps: string[]; accept?: string; profile?: boolean }> = {
@@ -82,7 +83,7 @@ export function Import() {
         </p>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {error && <p className="text-sm text-destructive">{friendlyError(error)}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {data?.sources.map((s) => {
@@ -261,7 +262,7 @@ function FileForm({
           />
         </>
       )}
-      {start.error && <p className="text-sm text-destructive">{start.error.message}</p>}
+      {start.error && <p className="text-sm text-destructive">{friendlyError(start.error)}</p>}
       <Button type="submit" className="w-full" disabled={!file || start.isPending}>
         {start.isPending ? "Uploading…" : "Import"}
       </Button>
@@ -285,7 +286,7 @@ function UsernameForm({ source, onJob }: { source: string; onJob: (id: string) =
     >
       <Label htmlFor={`user-${source}`}>Username</Label>
       <Input id={`user-${source}`} value={name} onChange={(e) => setName(e.target.value)} required autoComplete="off" />
-      {start.error && <p className="text-sm text-destructive">{start.error.message}</p>}
+      {start.error && <p className="text-sm text-destructive">{friendlyError(start.error)}</p>}
       <Button type="submit" className="w-full" disabled={start.isPending}>
         {start.isPending ? "Starting…" : "Import"}
       </Button>
@@ -357,7 +358,7 @@ function SimklSignIn({ configured, onJob }: { configured: boolean; onJob: (id: s
           </p>
         </div>
       )}
-      {pin.error && <p className="text-sm text-destructive">{pin.error.message}</p>}
+      {pin.error && <p className="text-sm text-destructive">{friendlyError(pin.error)}</p>}
       <Button type="submit" className="w-full" disabled={pin.isPending}>
         Sign in with Simkl
       </Button>

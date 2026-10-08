@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, type CatalogEntry, kindLabel, type SyncMode } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 
 const kindIcon = { movie: Clapperboard, show: Tv, audiobook: Headphones };
 
@@ -38,14 +39,14 @@ export function Marketplace() {
         />
       </div>
 
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {error && <p className="text-sm text-destructive">{friendlyError(error)}</p>}
       {!isLoading && data.length === 0 && <p className="text-sm text-muted-foreground">No plugins match “{q}”.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {data.map((p) => (
           <Card key={p.id} className="gap-4 p-5">
             <div className="flex items-start gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+              <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
                 <Plug className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -66,7 +67,7 @@ export function Marketplace() {
                   return <Icon key={k} className="size-4" aria-label={kindLabel[k]} />;
                 })}
               </div>
-              <Button size="sm" variant={p.connections ? "outline" : "default"} onClick={() => setOpen(p)}>
+              <Button variant={p.connections ? "ghost" : "secondary"} onClick={() => setOpen(p)}>
                 {p.connections ? "Add another account" : "Connect"}
               </Button>
             </div>
@@ -117,7 +118,7 @@ function ConnectDialog({ plugin, onClose }: { plugin: CatalogEntry; onClose: () 
         </DialogHeader>
 
         {isLoading && <p className="text-sm text-muted-foreground">Getting ready…</p>}
-        {error && <p className="text-sm text-destructive">{error.message}</p>}
+        {error && <p className="text-sm text-destructive">{friendlyError(error)}</p>}
 
         {connect.isSuccess ? (
           <div className="space-y-4 text-sm">
@@ -158,7 +159,7 @@ function ConnectDialog({ plugin, onClose }: { plugin: CatalogEntry; onClose: () 
                   )}
                 </div>
               )}
-              {connect.error && <p className="text-sm text-destructive">{connect.error.message}</p>}
+              {connect.error && <p className="text-sm text-destructive">{friendlyError(connect.error)}</p>}
               <Button type="submit" className="w-full" disabled={connect.isPending}>
                 {connect.isPending ? "Connecting…" : "Connect"}
               </Button>
@@ -195,13 +196,14 @@ function AddByUrl() {
           onChange={(e) => setUrl(e.target.value)}
           type="url"
           required
+          aria-label="Plugin manifest address"
           placeholder="https://my-plugin.example.com/manifest.json"
         />
         <Button type="submit" variant="secondary" disabled={add.isPending}>
           <Link2 /> Add
         </Button>
       </form>
-      {add.error && <p className="mt-2 text-destructive">{add.error.message}</p>}
+      {add.error && <p className="mt-2 text-destructive">{friendlyError(add.error)}</p>}
       {add.isSuccess && <p className="mt-2 text-muted-foreground">Added {add.data.name}.</p>}
     </details>
   );

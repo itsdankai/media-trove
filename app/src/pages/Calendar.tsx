@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type CalendarEntry } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 
 const ranges = { 30: "30 days", 90: "3 months", 365: "A year" } as const;
 const types = { all: "All", show: "TV", anime: "Anime", movie: "Movies", audiobook: "Audiobooks" } as const;
@@ -78,7 +79,7 @@ export function Calendar() {
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Checking release dates…</p>}
-      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {error && <p className="text-sm text-destructive">{friendlyError(error)}</p>}
       {!isLoading && !error && view === "list" && <ListView entries={entries} />}
       {!isLoading && !error && view === "month" && (
         <MonthView entries={entries} onNeedMore={() => set("days", "365", "90")} />
@@ -214,10 +215,10 @@ function MonthView({ entries, onNeedMore }: { entries: CalendarEntry[]; onNeedMo
                       title={n > 1 ? `${e.title} · ${n} episodes` : `${e.title} · ${e.label}`}
                       className={cn(
                         "block truncate rounded px-1 py-0.5 hover:bg-accent/60",
-                        e.anime && "bg-violet-500/15",
+                        e.anime && "bg-kind-anime/15",
                         !e.anime && e.kind === "show" && "bg-primary/10",
-                        !e.anime && e.kind === "movie" && "bg-sky-500/10",
-                        e.kind === "audiobook" && "bg-emerald-500/10",
+                        !e.anime && e.kind === "movie" && "bg-kind-movie/10",
+                        e.kind === "audiobook" && "bg-kind-audiobook/10",
                       )}
                     >
                       {e.title}
@@ -238,13 +239,13 @@ function MonthView({ entries, onNeedMore }: { entries: CalendarEntry[]; onNeedMo
           <span className="size-2.5 rounded-sm bg-primary/40" /> TV
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="size-2.5 rounded-sm bg-violet-500/40" /> Anime
+          <span className="size-2.5 rounded-sm bg-kind-anime/40" /> Anime
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="size-2.5 rounded-sm bg-sky-500/40" /> Movies
+          <span className="size-2.5 rounded-sm bg-kind-movie/40" /> Movies
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="size-2.5 rounded-sm bg-emerald-500/40" /> Audiobooks
+          <span className="size-2.5 rounded-sm bg-kind-audiobook/40" /> Audiobooks
         </span>
       </p>
     </div>
