@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, kindLabel, type MediaKind } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 
 const kinds: MediaKind[] = ["movie", "show", "audiobook"];
 
@@ -36,7 +37,9 @@ function Section({ kind, q }: { kind: MediaKind; q: string }) {
           ))}
         </PosterGrid>
       )}
-      {error && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{error.message}</p>}
+      {error && (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{friendlyError(error)}</p>
+      )}
       {data && data.length === 0 && <p className="text-sm text-muted-foreground">Nothing found.</p>}
       {data && data.length > 0 && (
         <PosterGrid>

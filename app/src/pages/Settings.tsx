@@ -3,6 +3,7 @@ import { cn } from "cn";
 import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
+import { Confirm } from "@/components/Confirm";
 import { SyncModePicker } from "@/components/SyncModePicker";
 import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ import {
   type SyncMode,
   timeAgo,
 } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 import { applyLook, effects, fonts, type Look, themes } from "@/lib/themes";
 
 export function Settings() {
@@ -46,7 +48,7 @@ export function Settings() {
         {/* One section at a time, so the page doesn't grow into one long scroll (builder, 2026-10-08).
             The tab is in the URL (?tab=apps), so a link or Back lands on the same one. */}
         <Tabs value={tab} onValueChange={(v) => setParams(v === "tracking" ? {} : { tab: v }, { replace: true })}>
-          <TabsList className="h-auto flex-wrap">
+          <TabsList className="max-w-full justify-start overflow-x-auto">
             {settingsTabs.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>
                 {t.label}
@@ -89,7 +91,7 @@ export function Settings() {
 const settingsTabs = [
   { id: "tracking", label: "Tracking" },
   { id: "appearance", label: "Appearance" },
-  { id: "apps", label: "Connected apps" },
+  { id: "apps", label: "Apps" },
   { id: "backups", label: "Backups" },
 ] as const;
 
@@ -130,7 +132,7 @@ function CaughtUpWindow({ days }: { days: number }) {
           ))}
         </select>
       </label>
-      <p className="text-xs text-muted-foreground">
+      <p className="max-w-prose text-xs text-muted-foreground">
         When you've seen every aired episode. Further off than this (a new season next year), the show reads Completed
         until the date gets close.
       </p>
@@ -181,7 +183,7 @@ function Appearance({ settings }: { settings: SettingsData }) {
                   <span className="size-4 rounded-full bg-card ring-1 ring-border" />
                 </div>
                 <p className="mt-2 text-sm font-medium">{t.name}</p>
-                <p className="text-xs text-muted-foreground">{t.note}</p>
+                <p className="max-w-prose text-xs text-muted-foreground">{t.note}</p>
               </button>
             ))}
           </div>
@@ -195,7 +197,7 @@ function Appearance({ settings }: { settings: SettingsData }) {
             />
             <span>
               AMOLED mode
-              <span className="block text-xs text-muted-foreground">
+              <span className="block max-w-prose text-xs text-muted-foreground">
                 True black backgrounds: easier on OLED screens and their batteries. Works with every dark theme.
               </span>
             </span>
@@ -220,7 +222,7 @@ function Appearance({ settings }: { settings: SettingsData }) {
               </button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-prose text-xs text-muted-foreground">
             {fonts.find((f) => f.id === settings.font)?.note} Fonts other than Inter and System load from Google Fonts.
           </p>
         </div>
@@ -237,11 +239,11 @@ function Appearance({ settings }: { settings: SettingsData }) {
               />
               <span>
                 {e.name}
-                <span className="block text-xs text-muted-foreground">{e.note}</span>
+                <span className="block max-w-prose text-xs text-muted-foreground">{e.note}</span>
               </span>
             </label>
           ))}
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-prose text-xs text-muted-foreground">
             Movement is switched off if your device is set to reduce motion.
           </p>
         </div>
@@ -255,7 +257,7 @@ function Appearance({ settings }: { settings: SettingsData }) {
           />
           <span>
             Rating posters
-            <span className="block text-xs text-muted-foreground">
+            <span className="block max-w-prose text-xs text-muted-foreground">
               {config?.rpdb
                 ? "Movies and shows use RPDB posters with IMDb and Rotten Tomatoes scores on them. "
                 : "Movies and shows: add RPDB_API_KEY to the server's .env for posters with IMDb and Rotten Tomatoes scores. "}
@@ -304,8 +306,11 @@ function Backups() {
               restore.mutate();
           }}
         >
-          <span className="font-medium">Restore</span>
+          <label htmlFor="restore-file" className="font-medium">
+            Restore
+          </label>
           <Input
+            id="restore-file"
             type="file"
             accept=".json"
             className="max-w-xs"
@@ -314,7 +319,7 @@ function Backups() {
           <Button type="submit" size="sm" variant="outline" disabled={!file || restore.isPending}>
             <Upload /> Restore
           </Button>
-          {restore.error && <p className="w-full text-destructive">{restore.error.message}</p>}
+          {restore.error && <p className="w-full text-destructive">{friendlyError(restore.error)}</p>}
           {restore.data && (
             <p className="w-full text-muted-foreground">
               {restore.data.added
@@ -376,8 +381,9 @@ function Connections() {
           <li key={c.id}>
             <Card className="gap-3 p-4">
               <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{name(c.pluginId)}</p>
+                {/* Phone: name and status fill the first row, the buttons wrap to the second. */}
+                <div className="min-w-0 flex-1 basis-[calc(100%-7rem)] sm:basis-auto">
+                  <p className="truncate font-medium">{name(c.pluginId)}</p>
                   <p className="truncate text-sm text-muted-foreground">{c.accountName}</p>
                 </div>
                 <StatusBadge status={statuses[c.pluginId]} />
@@ -398,14 +404,16 @@ function Connections() {
                 >
                   <RotateCcw /> Start over
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => remove.mutate(c.id)}
-                  aria-label={`Disconnect ${name(c.pluginId)}`}
+                <Confirm
+                  title={`Disconnect ${name(c.pluginId)}?`}
+                  description={`MediaTrove forgets the login for ${c.accountName} and stops syncing it. Everything it already brought in stays in your library. You can connect it again from the Marketplace.`}
+                  action="Disconnect"
+                  onConfirm={() => remove.mutate(c.id)}
                 >
-                  <Unplug />
-                </Button>
+                  <Button size="sm" variant="ghost" aria-label={`Disconnect ${name(c.pluginId)}`}>
+                    <Unplug />
+                  </Button>
+                </Confirm>
               </div>
               <SyncLine c={c} />
               <label htmlFor={`follow-${c.id}`} className="flex items-center gap-3 text-sm">
@@ -417,7 +425,7 @@ function Connections() {
                 />
                 <span>
                   Also remove things I unmark in {name(c.pluginId)}
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="block max-w-prose text-xs text-muted-foreground">
                     Your latest action in any app wins. Marks you made yourself in MediaTrove are always kept.
                   </span>
                 </span>
@@ -471,7 +479,7 @@ function KeepInSync({ c, app, onChanged }: { c: Connection; app: string; onChang
       {pending && (
         <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
           {preview.isLoading && <p className="text-muted-foreground">Checking what would change in {app}…</p>}
-          {preview.error && <p className="text-destructive">{preview.error.message}</p>}
+          {preview.error && <p className="text-destructive">{friendlyError(preview.error)}</p>}
           {p && (
             <p>
               {p.watched === 0
@@ -515,8 +523,8 @@ function KeepInSync({ c, app, onChanged }: { c: Connection; app: string; onChang
 function PushLine({ c, app }: { c: Connection; app: string }) {
   const s = c.lastPushSummary;
   if (c.syncMode === "off") return null;
-  if (c.pushing) return <p className="text-xs text-muted-foreground">Sending changes to {app}…</p>;
-  if (!s) return <p className="text-xs text-muted-foreground">Changes go to {app} after the next sync.</p>;
+  if (c.pushing) return <p className="max-w-prose text-xs text-muted-foreground">Sending changes to {app}…</p>;
+  if (!s) return <p className="max-w-prose text-xs text-muted-foreground">Changes go to {app} after the next sync.</p>;
   if (s.error)
     return (
       <p className="text-xs text-destructive">
@@ -524,7 +532,7 @@ function PushLine({ c, app }: { c: Connection; app: string }) {
       </p>
     );
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className="max-w-prose text-xs text-muted-foreground">
       Last sent to {app} {timeAgo(s.at)}
       {` · ${s.ok} updated`}
       {s.notFound > 0 && ` · ${s.notFound} not in ${app}`}
@@ -548,7 +556,7 @@ function SyncLine({ c }: { c: Connection }) {
   if (c.lastError) return <p className="text-xs text-destructive">Last sync failed: {c.lastError}</p>;
   const s = c.lastSummary;
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className="max-w-prose text-xs text-muted-foreground">
       Last sync {timeAgo(c.lastSyncAt)}
       {s && ` · ${s.added} new`}
       {s && s.unmatched > 0 && ` · ${s.unmatched} couldn't be matched`}

@@ -94,6 +94,8 @@ export function describeGroup(g: ActivityGroup<unknown>, kind?: MediaKind | null
       return `Unmarked${ep}${via}`;
     case "progress": {
       const span = progressSpan(g);
+      // A position of 0% means it was opened again from the start, not "watched to 0%".
+      if (span === "0%") return `${kind === "audiobook" ? "Started listening" : `Started${ep}`}${via}`;
       const verb = kind === "audiobook" ? "Listened" : `Watched${ep}`;
       return `${verb} ${span.includes("→") ? span : `to ${span}`}${via}`;
     }

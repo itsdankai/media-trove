@@ -6,6 +6,7 @@ import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import { friendlyError } from "@/lib/errors";
 
 /** First run: shown until setup is saved once. */
 export function Setup() {
@@ -34,7 +35,7 @@ export function Setup() {
         <Button size="lg" onClick={() => save.mutate()} disabled={save.isPending}>
           Save and connect apps
         </Button>
-        {save.error && <p className="text-sm text-destructive">{save.error.message}</p>}
+        {save.error && <p className="text-sm text-destructive">{friendlyError(save.error)}</p>}
       </Card>
     </div>
   );
