@@ -86,6 +86,8 @@ export type Settings = {
   ratingPosters: boolean; // RPDB posters for movies/shows (when the server has RPDB_API_KEY), score bar for anime
   theme: string; // lib/themes.ts
   effects: string[]; // underglow, ambient, motion, shine
+  amoled: boolean; // true black backgrounds (dark themes)
+  font: string; // lib/themes.ts fonts
 };
 
 export type Field = {

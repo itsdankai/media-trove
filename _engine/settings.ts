@@ -16,6 +16,8 @@ export type Settings = {
   /** Settings → Appearance (2026-10-08): a colour theme and the effects switched on (app/src/lib/themes.ts). */
   theme: string;
   effects: string[];
+  amoled: boolean; // true black backgrounds for OLED screens (dark themes)
+  font: string; // app/src/lib/themes.ts fonts
 };
 
 const defaults: Settings = {
@@ -25,6 +27,8 @@ const defaults: Settings = {
   ratingPosters: true,
   theme: "trove",
   effects: ["underglow", "ambient"],
+  amoled: false,
+  font: "inter",
 };
 
 export function getSettings(db: Db): Settings {

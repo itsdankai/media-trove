@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { SyncModePicker } from "@/components/SyncModePicker";
 import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   api,
   type Connection,
@@ -18,11 +19,13 @@ import {
   type SyncMode,
   timeAgo,
 } from "@/lib/api";
-import { applyLook, effects, themes } from "@/lib/themes";
+import { applyLook, effects, fonts, type Look, themes } from "@/lib/themes";
 
 export function Settings() {
   const qc = useQueryClient();
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+  const [params, setParams] = useSearchParams();
+  const tab = settingsTabs.find((t) => t.id === params.get("tab"))?.id ?? "tracking";
   const [threshold, setThreshold] = useState(0.9);
   useEffect(() => {
     if (settings) setThreshold(settings.watchedThreshold);
@@ -37,33 +40,58 @@ export function Settings() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        {/* One section at a time, so the page doesn't grow into one long scroll (builder, 2026-10-08).
+            The tab is in the URL (?tab=apps), so a link or Back lands on the same one. */}
+        <Tabs value={tab} onValueChange={(v) => setParams(v === "tracking" ? {} : { tab: v }, { replace: true })}>
+          <TabsList className="h-auto flex-wrap">
+            {settingsTabs.map((t) => (
+              <TabsTrigger key={t.id} value={t.id}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-medium">Tracking</h2>
-        <Card className="gap-5 p-5">
-          <ThresholdPicker value={threshold} onChange={setThreshold} />
-          <div className="flex items-center gap-3">
-            <Button onClick={() => save.mutate()} disabled={save.isPending || threshold === settings?.watchedThreshold}>
-              Save
-            </Button>
-            {save.isSuccess && threshold === settings?.watchedThreshold && (
-              <span className="text-sm text-muted-foreground">Saved. Your library was recalculated.</span>
-            )}
-          </div>
-          {settings && <CaughtUpWindow days={settings.caughtUpDays} />}
-        </Card>
-      </section>
+      {tab === "tracking" && (
+        <section className="space-y-4">
+          <h2 className="text-lg font-medium">Tracking</h2>
+          <Card className="gap-5 p-5">
+            <ThresholdPicker value={threshold} onChange={setThreshold} />
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => save.mutate()}
+                disabled={save.isPending || threshold === settings?.watchedThreshold}
+              >
+                Save
+              </Button>
+              {save.isSuccess && threshold === settings?.watchedThreshold && (
+                <span className="text-sm text-muted-foreground">Saved. Your library was recalculated.</span>
+              )}
+            </div>
+            {settings && <CaughtUpWindow days={settings.caughtUpDays} />}
+          </Card>
+        </section>
+      )}
 
-      {settings && <Appearance settings={settings} />}
+      {tab === "appearance" && settings && <Appearance settings={settings} />}
 
-      <Connections />
+      {tab === "apps" && <Connections />}
 
-      <Backups />
+      {tab === "backups" && <Backups />}
     </div>
   );
 }
+
+const settingsTabs = [
+  { id: "tracking", label: "Tracking" },
+  { id: "appearance", label: "Appearance" },
+  { id: "apps", label: "Connected apps" },
+  { id: "backups", label: "Backups" },
+] as const;
 
 const windows = [
   { days: 30, label: "30 days" },
@@ -119,12 +147,12 @@ function Appearance({ settings }: { settings: SettingsData }) {
     onSuccess: (s) => qc.setQueryData(["settings"], s),
   });
   // Show the change straight away; the server copy follows.
-  const look = (theme: string, fx: string[]) => {
-    applyLook(theme, fx);
-    save.mutate({ theme, effects: fx });
+  const change = (patch: Partial<Look>) => {
+    applyLook({ ...settings, ...patch });
+    save.mutate(patch);
   };
   const toggle = (id: string, on: boolean) =>
-    look(settings.theme, on ? [...settings.effects, id] : settings.effects.filter((e) => e !== id));
+    change({ effects: on ? [...settings.effects, id] : settings.effects.filter((e) => e !== id) });
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-medium">Appearance</h2>
@@ -136,10 +164,11 @@ function Appearance({ settings }: { settings: SettingsData }) {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => look(t.id, settings.effects)}
+                onClick={() => change({ theme: t.id })}
                 aria-pressed={settings.theme === t.id}
-                // The preview carries the theme itself, so it shows the real colours.
+                // The preview carries the theme itself (and AMOLED), so it shows the real colours.
                 data-theme={t.id}
+                data-amoled={settings.amoled ? "" : undefined}
                 className={cn(
                   t.id !== "daylight" && "dark",
                   "rounded-xl border bg-background p-3 text-left text-foreground transition-shadow",
@@ -156,6 +185,44 @@ function Appearance({ settings }: { settings: SettingsData }) {
               </button>
             ))}
           </div>
+          <label htmlFor="amoled" className="flex items-center gap-3 pt-2 text-sm">
+            <Switch
+              id="amoled"
+              checked={settings.amoled}
+              onCheckedChange={(on) => change({ amoled: on })}
+              disabled={settings.theme === "daylight"}
+              aria-label="AMOLED mode"
+            />
+            <span>
+              AMOLED mode
+              <span className="block text-xs text-muted-foreground">
+                True black backgrounds: easier on OLED screens and their batteries. Works with every dark theme.
+              </span>
+            </span>
+          </label>
+        </div>
+        <div className="space-y-3 border-t pt-5">
+          <p className="text-sm font-medium">Font</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {fonts.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => change({ font: f.id })}
+                aria-pressed={settings.font === f.id}
+                title={f.note}
+                className={cn(
+                  "rounded-lg border bg-card px-3 py-2 text-left text-sm transition-shadow",
+                  settings.font === f.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
+                )}
+              >
+                {f.name}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {fonts.find((f) => f.id === settings.font)?.note} Fonts other than Inter and System load from Google Fonts.
+          </p>
         </div>
         <div className="space-y-3 border-t pt-5">
           <p className="text-sm font-medium">Effects</p>
