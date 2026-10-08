@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="trove" data-fx="underglow ambient">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +9,17 @@
     <link rel="apple-touch-icon" href="/assets/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <script>
+      // The saved theme and effects (lib/themes.ts applyLook), applied before the app loads so there's no flash.
+      try {
+        const look = JSON.parse(localStorage.getItem("mediatrove-look") || "null");
+        if (look) {
+          document.documentElement.dataset.theme = look.theme;
+          document.documentElement.dataset.fx = look.fx.join(" ");
+          document.documentElement.classList.toggle("dark", look.theme !== "daylight");
+        }
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
