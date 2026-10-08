@@ -159,6 +159,11 @@ describe("watchlist (2026-10-07)", () => {
     expect(lib[0].state.status).toBe("completed");
   });
 
+  it("a title the metadata source doesn't know is not found, not a server error", async () => {
+    const { app } = setup();
+    expect((await app.request("/api/watchlist/audible-audiobook-B0NOTREAL1", { method: "PUT" })).status).toBe(404);
+  });
+
   it("removing it takes it off; a title never saved and never watched isn't listed", async () => {
     const { app } = setup();
     await app.request("/api/watchlist/tmdb-show-95396", { method: "PUT" });

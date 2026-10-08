@@ -225,7 +225,14 @@ export function createApp(
       // --- watchlist ------------------------------------------------------------------------
       .put("/api/watchlist/:key", async (c) => {
         const key = c.req.param("key");
-        await lib.ensureMedia(key);
+        // A key the metadata source doesn't know (typo, removed title): not found, not a server error.
+        if (
+          !(await lib.ensureMedia(key).then(
+            () => true,
+            () => false,
+          ))
+        )
+          return c.json({ error: "not found" }, 404);
         db.insert(watchlist).values({ mediaKey: key, addedAt: Date.now() }).onConflictDoNothing().run();
         return c.json({ watchlisted: true });
       })
