@@ -48,7 +48,7 @@ export function Settings() {
         {/* One section at a time, so the page doesn't grow into one long scroll (builder, 2026-10-08).
             The tab is in the URL (?tab=apps), so a link or Back lands on the same one. */}
         <Tabs value={tab} onValueChange={(v) => setParams(v === "tracking" ? {} : { tab: v }, { replace: true })}>
-          <TabsList className="max-w-full justify-start overflow-x-auto">
+          <TabsList className="max-w-full">
             {settingsTabs.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>
                 {t.label}
@@ -91,7 +91,7 @@ export function Settings() {
 const settingsTabs = [
   { id: "tracking", label: "Tracking" },
   { id: "appearance", label: "Appearance" },
-  { id: "apps", label: "Apps" },
+  { id: "apps", label: "Plugins" },
   { id: "backups", label: "Backups" },
 ] as const;
 
@@ -360,7 +360,7 @@ function Connections() {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">Connected apps</h2>
+        <h2 className="text-lg font-medium">Connected plugins</h2>
         <Button asChild size="sm" variant="outline">
           <Link to="/marketplace">
             <Store /> Marketplace

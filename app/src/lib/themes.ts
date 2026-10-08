@@ -24,14 +24,28 @@ export const effects = [
 
 /** Fonts from Google Fonts, loaded only when picked. Inter ships with the page; System needs no download. */
 export const fonts = [
-  { id: "inter", name: "Inter", family: "Inter", note: "The default. Clean and neutral." },
-  { id: "system", name: "System", family: "", note: "Your device's own font. Nothing to download." },
-  { id: "outfit", name: "Outfit", family: "Outfit", note: "Round and friendly." },
-  { id: "spacegrotesk", name: "Space Grotesk", family: "Space Grotesk", note: "Techy, a bit quirky." },
-  { id: "lexend", name: "Lexend", family: "Lexend", note: "Wide and easy to read." },
-  { id: "atkinson", name: "Atkinson Hyperlegible", family: "Atkinson Hyperlegible", note: "Made for low vision." },
-  { id: "nunito", name: "Nunito", family: "Nunito", note: "Soft rounded ends." },
-  { id: "jetbrains", name: "JetBrains Mono", family: "JetBrains Mono", note: "Monospace, for the nerds." },
+  // adjust: a font-size-adjust value that gives each font the same text width as Inter, so switching fonts
+  // never reshapes the layout (measured 2026-10-08; JetBrains Mono was 19% wider, Outfit 9% narrower).
+  { id: "inter", name: "Inter", family: "Inter", adjust: 0, note: "The default. Clean and neutral." },
+  { id: "system", name: "System", family: "", adjust: 0.544, note: "Your device's own font. Nothing to download." },
+  { id: "outfit", name: "Outfit", family: "Outfit", adjust: 0.534, note: "Round and friendly." },
+  { id: "spacegrotesk", name: "Space Grotesk", family: "Space Grotesk", adjust: 0.5, note: "Techy, a bit quirky." },
+  { id: "lexend", name: "Lexend", family: "Lexend", adjust: 0.528, note: "Wide and easy to read." },
+  {
+    id: "atkinson",
+    name: "Atkinson Hyperlegible",
+    family: "Atkinson Hyperlegible",
+    adjust: 0.542,
+    note: "Made for low vision.",
+  },
+  { id: "nunito", name: "Nunito", family: "Nunito", adjust: 0.53, note: "Soft rounded ends." },
+  {
+    id: "jetbrains",
+    name: "JetBrains Mono",
+    family: "JetBrains Mono",
+    adjust: 0.46,
+    note: "Monospace, for the nerds.",
+  },
 ] as const;
 
 export type Look = { theme: string; effects: string[]; amoled: boolean; font: string };
@@ -51,9 +65,11 @@ export function applyLook(look: Look) {
   html.classList.toggle("dark", look.theme !== "daylight");
   html.toggleAttribute("data-amoled", look.amoled);
   html.style.setProperty("--app-font", font.family ? `"${font.family}"` : "system-ui");
+  if (font.adjust) html.style.setProperty("--app-font-adjust", String(font.adjust));
+  else html.style.removeProperty("--app-font-adjust");
   loadFont(url);
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...look, family: font.family, url }));
+    localStorage.setItem(KEY, JSON.stringify({ ...look, family: font.family, adjust: font.adjust, url }));
   } catch {
     // Private windows can refuse storage; the server copy still applies once loaded.
   }
