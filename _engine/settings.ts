@@ -13,6 +13,9 @@ export type Settings = {
   caughtUpDays: number;
   /** Posters with scores drawn on: RPDB for movies and shows (needs RPDB_API_KEY), the community score for anime. */
   ratingPosters: boolean;
+  /** Settings → Appearance (2026-10-08): a colour theme and the effects switched on (app/src/lib/themes.ts). */
+  theme: string;
+  effects: string[];
 };
 
 const defaults: Settings = {
@@ -20,6 +23,8 @@ const defaults: Settings = {
   setupComplete: false,
   caughtUpDays: 90,
   ratingPosters: true,
+  theme: "trove",
+  effects: ["underglow", "ambient"],
 };
 
 export function getSettings(db: Db): Settings {

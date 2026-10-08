@@ -198,6 +198,14 @@ export function createApp(
             setupComplete: z.boolean().optional(),
             caughtUpDays: z.number().int().min(0).max(730).optional(), // 0 = any time
             ratingPosters: z.boolean().optional(),
+            theme: z
+              .string()
+              .regex(/^[a-z]{2,20}$/)
+              .optional(),
+            effects: z
+              .array(z.enum(["underglow", "ambient", "motion", "shine"]))
+              .max(4)
+              .optional(),
           }),
         ),
         (c) => c.json(updateSettings(db, c.req.valid("json"))),

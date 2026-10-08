@@ -84,6 +84,8 @@ export type Settings = {
   setupComplete: boolean;
   caughtUpDays: number; // 0 = any time
   ratingPosters: boolean; // RPDB posters for movies/shows (when the server has RPDB_API_KEY), score bar for anime
+  theme: string; // lib/themes.ts
+  effects: string[]; // underglow, ambient, motion, shine
 };
 
 export type Field = {

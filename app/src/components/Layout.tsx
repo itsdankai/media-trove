@@ -18,6 +18,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { applyLook } from "@/lib/themes";
 
 const nav = [
   { to: "/", label: "Home", icon: House, end: true },
@@ -40,6 +41,10 @@ export function Layout() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+  // The saved look (Settings → Appearance), kept in step with the server's copy.
+  useEffect(() => {
+    if (settings) applyLook(settings.theme, settings.effects);
+  }, [settings]);
 
   // First run: send people to setup until they've saved it once.
   useEffect(() => {
@@ -53,6 +58,7 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
+      <div className="fx-ambient" aria-hidden="true" />
       <aside className="hidden md:flex flex-col gap-1 border-r bg-card/40 p-4 sticky top-0 h-dvh">
         <Link
           to="/"

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -9,7 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { api, type Connection, type PluginStatus, type SyncMode, timeAgo } from "@/lib/api";
+import {
+  api,
+  type Connection,
+  type PluginStatus,
+  type Settings as SettingsData,
+  type SyncMode,
+  timeAgo,
+} from "@/lib/api";
+import { applyLook, effects, themes } from "@/lib/themes";
 
 export function Settings() {
   const qc = useQueryClient();
@@ -47,7 +56,7 @@ export function Settings() {
         </Card>
       </section>
 
-      {settings && <Display ratingPosters={settings.ratingPosters} />}
+      {settings && <Appearance settings={settings} />}
 
       <Connections />
 
@@ -101,23 +110,79 @@ function CaughtUpWindow({ days }: { days: number }) {
   );
 }
 
-/** Rating posters: RPDB for movies and shows (when the server has RPDB_API_KEY), the community score for anime. */
-function Display({ ratingPosters }: { ratingPosters: boolean }) {
+/** Theme, effects and rating posters (RPDB for movies and shows when the server has RPDB_API_KEY; the anime community score). */
+function Appearance({ settings }: { settings: SettingsData }) {
   const qc = useQueryClient();
   const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.config });
   const save = useMutation({
-    mutationFn: (on: boolean) => api.saveSettings({ ratingPosters: on }),
+    mutationFn: (patch: Partial<SettingsData>) => api.saveSettings(patch),
     onSuccess: (s) => qc.setQueryData(["settings"], s),
   });
+  // Show the change straight away; the server copy follows.
+  const look = (theme: string, fx: string[]) => {
+    applyLook(theme, fx);
+    save.mutate({ theme, effects: fx });
+  };
+  const toggle = (id: string, on: boolean) =>
+    look(settings.theme, on ? [...settings.effects, id] : settings.effects.filter((e) => e !== id));
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-medium">Display</h2>
-      <Card className="p-5">
-        <label htmlFor="rating-posters" className="flex items-center gap-3 text-sm">
+      <h2 className="text-lg font-medium">Appearance</h2>
+      <Card className="gap-6 p-5">
+        <div className="space-y-3">
+          <p className="text-sm font-medium">Theme</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {themes.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => look(t.id, settings.effects)}
+                aria-pressed={settings.theme === t.id}
+                // The preview carries the theme itself, so it shows the real colours.
+                data-theme={t.id}
+                className={cn(
+                  t.id !== "daylight" && "dark",
+                  "rounded-xl border bg-background p-3 text-left text-foreground transition-shadow",
+                  settings.theme === t.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="size-4 rounded-full bg-primary" />
+                  <span className="size-4 rounded-full" style={{ background: "var(--glow2)" }} />
+                  <span className="size-4 rounded-full bg-card ring-1 ring-border" />
+                </div>
+                <p className="mt-2 text-sm font-medium">{t.name}</p>
+                <p className="text-xs text-muted-foreground">{t.note}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3 border-t pt-5">
+          <p className="text-sm font-medium">Effects</p>
+          {effects.map((e) => (
+            <label key={e.id} htmlFor={`fx-${e.id}`} className="flex items-center gap-3 text-sm">
+              <Switch
+                id={`fx-${e.id}`}
+                checked={settings.effects.includes(e.id)}
+                onCheckedChange={(on) => toggle(e.id, on)}
+                disabled={e.id === "motion" && !settings.effects.includes("ambient")}
+                aria-label={e.name}
+              />
+              <span>
+                {e.name}
+                <span className="block text-xs text-muted-foreground">{e.note}</span>
+              </span>
+            </label>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            Movement is switched off if your device is set to reduce motion.
+          </p>
+        </div>
+        <label htmlFor="rating-posters" className="flex items-center gap-3 border-t pt-5 text-sm">
           <Switch
             id="rating-posters"
-            checked={ratingPosters}
-            onCheckedChange={(on) => save.mutate(on)}
+            checked={settings.ratingPosters}
+            onCheckedChange={(on) => save.mutate({ ratingPosters: on })}
             disabled={save.isPending}
             aria-label="Rating posters"
           />
