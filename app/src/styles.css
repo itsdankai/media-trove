@@ -121,6 +121,17 @@
   --glow2: oklch(0.6 0.1 280);
 }
 
+/* AMOLED: true black behind everything (pixels off on OLED screens), with surfaces just above black so
+   cards still read. Works on every dark theme; later and more specific than the theme rules above. */
+.dark[data-theme][data-amoled] {
+  --background: oklch(0 0 0);
+  --card: oklch(0.13 var(--nc, 0.015) var(--nh, 270));
+  --popover: oklch(0.13 var(--nc, 0.015) var(--nh, 270));
+  --muted: oklch(0.17 var(--nc, 0.015) var(--nh, 270));
+  --secondary: oklch(0.2 var(--nc, 0.015) var(--nh, 270));
+  --accent: oklch(0.21 var(--nc, 0.015) var(--nh, 270));
+}
+
 /* ---- Effects: words in html[data-fx]. ---- */
 
 /* Underglow: posters lift and glow in the theme's colour (the Stick Bird store's card hover). */
@@ -223,5 +234,9 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+  /* The font picked in Settings → Appearance (lib/themes.ts sets --app-font on <html>). */
+  html {
+    font-family: var(--app-font, "Inter"), ui-sans-serif, system-ui, sans-serif;
   }
 }

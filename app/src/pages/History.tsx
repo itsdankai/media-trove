@@ -1,11 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router";
 import { Poster } from "@/components/PosterCard";
 import { type ActivityGroup, groupProgress, progressSpan, timeSpan } from "@/lib/activity";
 import { api, type EventRow, type MediaKind } from "@/lib/api";
 
+/** Lines shown per day before "Show all" (builder, 2026-10-08). */
+const PER_DAY = 10;
+
 export function History() {
   const { data = [], isLoading } = useQuery({ queryKey: ["history"], queryFn: () => api.history(300) });
+  const [open, setOpen] = useState<Set<string>>(new Set()); // days expanded with "Show all"
 
   // Position updates for the same item, app and day become one line (groupProgress).
   const days = new Map<string, ActivityGroup<(typeof data)[number]>[]>();
@@ -27,7 +32,7 @@ export function History() {
         <section key={day} className="space-y-2">
           <h2 className="text-sm font-medium text-muted-foreground">{day}</h2>
           <ul className="divide-y rounded-xl border bg-card">
-            {groups.map((g) => {
+            {(open.has(day) ? groups : groups.slice(0, PER_DAY)).map((g) => {
               const { title, poster, mediaKind, sourceName } = g.rows[0];
               return (
                 <li key={g.last.id}>
@@ -51,6 +56,22 @@ export function History() {
               );
             })}
           </ul>
+          {groups.length > PER_DAY && (
+            <button
+              type="button"
+              onClick={() =>
+                setOpen((s) => {
+                  const next = new Set(s);
+                  if (next.has(day)) next.delete(day);
+                  else next.add(day);
+                  return next;
+                })
+              }
+              className="text-sm text-primary underline-offset-4 hover:underline"
+            >
+              {open.has(day) ? "Show fewer" : `Show all ${groups.length}`}
+            </button>
+          )}
         </section>
       ))}
     </div>

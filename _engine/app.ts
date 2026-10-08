@@ -206,6 +206,11 @@ export function createApp(
               .array(z.enum(["underglow", "ambient", "motion", "shine"]))
               .max(4)
               .optional(),
+            amoled: z.boolean().optional(),
+            font: z
+              .string()
+              .regex(/^[a-z]{2,20}$/)
+              .optional(),
           }),
         ),
         (c) => c.json(updateSettings(db, c.req.valid("json"))),

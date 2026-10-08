@@ -43,7 +43,7 @@ export function Layout() {
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   // The saved look (Settings → Appearance), kept in step with the server's copy.
   useEffect(() => {
-    if (settings) applyLook(settings.theme, settings.effects);
+    if (settings) applyLook(settings);
   }, [settings]);
 
   // First run: send people to setup until they've saved it once.

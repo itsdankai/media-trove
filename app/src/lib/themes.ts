@@ -1,6 +1,7 @@
 // Settings → Appearance (2026-10-08). Each theme is a set of colour tokens in styles.css, selected by
-// data-theme; effects are words in data-fx. Both live on <html>. Saved on the server (so every device
-// matches) and copied to localStorage so index.html can apply them before the app loads (no flash).
+// data-theme; effects are words in data-fx; AMOLED is data-amoled; the font is --app-font. All live on
+// <html>. Saved on the server (so every device matches) and copied to localStorage so index.html can
+// apply them before the app loads (no flash).
 
 export const themes = [
   { id: "trove", name: "Trove", note: "Gold on deep ink. The original." },
@@ -21,17 +22,51 @@ export const effects = [
   { id: "shine", name: "Poster shine", note: "A sweep of light across a poster on hover." },
 ] as const;
 
+/** Fonts from Google Fonts, loaded only when picked. Inter ships with the page; System needs no download. */
+export const fonts = [
+  { id: "inter", name: "Inter", family: "Inter", note: "The default. Clean and neutral." },
+  { id: "system", name: "System", family: "", note: "Your device's own font. Nothing to download." },
+  { id: "outfit", name: "Outfit", family: "Outfit", note: "Round and friendly." },
+  { id: "spacegrotesk", name: "Space Grotesk", family: "Space Grotesk", note: "Techy, a bit quirky." },
+  { id: "lexend", name: "Lexend", family: "Lexend", note: "Wide and easy to read." },
+  { id: "atkinson", name: "Atkinson Hyperlegible", family: "Atkinson Hyperlegible", note: "Made for low vision." },
+  { id: "nunito", name: "Nunito", family: "Nunito", note: "Soft rounded ends." },
+  { id: "jetbrains", name: "JetBrains Mono", family: "JetBrains Mono", note: "Monospace, for the nerds." },
+] as const;
+
+export type Look = { theme: string; effects: string[]; amoled: boolean; font: string };
+
 const KEY = "mediatrove-look";
 
-/** Puts a theme and effects on the page now, and remembers them for the next load. */
-export function applyLook(theme: string, fx: string[]) {
+/** Puts a look on the page now, and remembers it for the next load. */
+export function applyLook(look: Look) {
   const html = document.documentElement;
-  html.dataset.theme = theme;
-  html.dataset.fx = fx.join(" ");
-  html.classList.toggle("dark", theme !== "daylight");
+  const font = fonts.find((f) => f.id === look.font) ?? fonts[0];
+  const url =
+    font.family && font.id !== "inter"
+      ? `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font.family)}:wght@400;500;600;700&display=swap`
+      : "";
+  html.dataset.theme = look.theme;
+  html.dataset.fx = look.effects.join(" ");
+  html.classList.toggle("dark", look.theme !== "daylight");
+  html.toggleAttribute("data-amoled", look.amoled);
+  html.style.setProperty("--app-font", font.family ? `"${font.family}"` : "system-ui");
+  loadFont(url);
   try {
-    localStorage.setItem(KEY, JSON.stringify({ theme, fx }));
+    localStorage.setItem(KEY, JSON.stringify({ ...look, family: font.family, url }));
   } catch {
     // Private windows can refuse storage; the server copy still applies once loaded.
   }
+}
+
+function loadFont(url: string) {
+  let link = document.getElementById("app-font") as HTMLLinkElement | null;
+  if (!url) return link?.remove();
+  if (!link) {
+    link = document.createElement("link");
+    link.id = "app-font";
+    link.rel = "stylesheet";
+    document.head.append(link);
+  }
+  if (link.href !== url) link.href = url;
 }
