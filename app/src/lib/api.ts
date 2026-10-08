@@ -268,7 +268,7 @@ export const kindLabel: Record<MediaKind, string> = { movie: "Movies", show: "Sh
 export const kindPath: Record<MediaKind, string> = { movie: "/movies", show: "/shows", audiobook: "/audiobooks" };
 
 export const statusLabel: Record<TrackState["status"], string> = {
-  planned: "Watchlist",
+  planned: "On watchlist",
   watching: "Watching",
   caught_up: "Caught up",
   completed: "Completed",

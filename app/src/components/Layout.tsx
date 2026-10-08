@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import {
+  Bookmark,
   CalendarDays,
   Clapperboard,
   FileUp,
@@ -24,6 +25,7 @@ const nav = [
   { to: "/shows", label: "Shows", icon: Tv },
   { to: "/anime", label: "Anime", icon: Sparkles },
   { to: "/audiobooks", label: "Audiobooks", icon: Headphones },
+  { to: "/watchlist", label: "Watchlist", icon: Bookmark },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/history", label: "History", icon: History },
 ];
