@@ -67,7 +67,7 @@ export function Detail() {
               <p className="mt-1 text-muted-foreground">{metaLine(m)}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">
+              <Badge>
                 {state.status === "planned" && !data.watchlisted ? "Not tracked" : statusLabel[state.status]}
               </Badge>
               {m.genres.map((g) => (

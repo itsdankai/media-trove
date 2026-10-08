@@ -46,7 +46,7 @@ export function Marketplace() {
         {data.map((p) => (
           <Card key={p.id} className="gap-4 p-5">
             <div className="flex items-start gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+              <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
                 <Plug className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ export function Marketplace() {
                   return <Icon key={k} className="size-4" aria-label={kindLabel[k]} />;
                 })}
               </div>
-              <Button variant={p.connections ? "ghost" : "secondary"} onClick={() => setOpen(p)}>
+              <Button size="sm" variant={p.connections ? "outline" : "default"} onClick={() => setOpen(p)}>
                 {p.connections ? "Add another account" : "Connect"}
               </Button>
             </div>

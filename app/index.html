@@ -20,6 +20,7 @@
           html.classList.toggle("dark", look.theme !== "daylight");
           html.toggleAttribute("data-amoled", look.amoled);
           html.style.setProperty("--app-font", look.family ? '"' + look.family + '"' : "system-ui");
+          if (look.adjust) html.style.setProperty("--app-font-adjust", String(look.adjust));
           if (look.url) {
             const link = document.createElement("link");
             link.id = "app-font";

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Clapperboard, Headphones, Sparkles, Tv } from "lucide-react";
 import { Link } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
+import { Card } from "@/components/ui/card";
 import { api, completion, type Media, type Section, statusLabel, type TrackState } from "@/lib/api";
 
 type Item = { media: Media; state: TrackState };
@@ -9,11 +10,11 @@ type Item = { media: Media; state: TrackState };
 /** Two rows of posters at the widest layout (7 columns); narrower screens show two rows of fewer. */
 const ROW_LIMIT = 14;
 
-const sections: { id: Section; label: string; path: string; icon: typeof Tv }[] = [
-  { id: "movie", label: "Movies", path: "/movies", icon: Clapperboard },
-  { id: "show", label: "Shows", path: "/shows", icon: Tv },
-  { id: "anime", label: "Anime", path: "/anime", icon: Sparkles },
-  { id: "audiobook", label: "Audiobooks", path: "/audiobooks", icon: Headphones },
+const sections: { id: Section; label: string; path: string; icon: typeof Tv; verb: string }[] = [
+  { id: "movie", label: "Movies", path: "/movies", icon: Clapperboard, verb: "Continue watching" },
+  { id: "show", label: "Shows", path: "/shows", icon: Tv, verb: "Continue watching" },
+  { id: "anime", label: "Anime", path: "/anime", icon: Sparkles, verb: "Continue watching" },
+  { id: "audiobook", label: "Audiobooks", path: "/audiobooks", icon: Headphones, verb: "Continue listening" },
 ];
 
 /** Same split as the library pages: anime (movies and shows) has its own section. */
@@ -22,38 +23,29 @@ const inSection = (s: Section, m: Media) =>
 
 const inProgress = (i: Item) => i.state.status === "watching" || i.state.status === "listening";
 
-const greeting = () => {
-  const h = new Date().getHours();
-  return h < 5 ? "Up late" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-};
-
-// Home answers "what now?" first (critique 2026-10-08): a greeting, then everything in progress, then what
-// was recently finished. Counts live in the greeting line as links instead of a row of stat tiles.
 export function Home() {
   const { data = [], isLoading } = useQuery({ queryKey: ["library"], queryFn: () => api.library() });
   // Watchlist titles not started yet live on the library's Watchlist tab, not here.
   const started = data.filter((i) => i.state.status !== "planned");
-  const upNext = started.filter(inProgress); // the API sorts by latest activity
-  const finished = started.filter((i) => !inProgress(i)).slice(0, ROW_LIMIT);
-  const counts = sections
-    .map((s) => ({ ...s, n: started.filter((i) => inSection(s.id, i.media)).length }))
-    .filter((s) => s.n > 0);
+  const recent = started.slice(0, ROW_LIMIT); // the API sorts by latest activity
 
   return (
     <div className="space-y-10">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">{greeting()}</h1>
-        {counts.length > 0 && (
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            {counts.map((s) => (
-              <Link key={s.id} to={s.path} className="inline-flex items-center gap-1.5 hover:text-foreground">
-                <s.icon className="size-4" />
-                <span className="font-medium text-foreground tabular-nums">{s.n}</span> {s.label.toLowerCase()}
-              </Link>
-            ))}
-          </p>
-        )}
-      </header>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        {sections.map((s) => (
+          <Link key={s.id} to={s.path}>
+            <Card className="flex-row items-center gap-3 p-4 transition-colors hover:bg-accent">
+              <s.icon className="hidden size-8 shrink-0 text-primary sm:block" />
+              <div>
+                <p className="text-2xl font-semibold leading-none">
+                  {started.filter((i) => inSection(s.id, i.media)).length}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+              </div>
+            </Card>
+          </Link>
+        ))}
+      </div>
 
       {!isLoading && started.length === 0 && (
         <div className="rounded-xl border border-dashed p-10 text-center">
@@ -64,33 +56,32 @@ export function Home() {
         </div>
       )}
 
-      {upNext.length > 0 && (
-        <Row title="Up next" count={upNext.length}>
-          {upNext.slice(0, ROW_LIMIT).map((i) => (
+      {recent.length > 0 && (
+        <Row title="Most recent">
+          {recent.map((i) => (
             <HomeCard key={i.media.key} item={i} />
           ))}
         </Row>
       )}
 
-      {finished.length > 0 && (
-        <Row title="Recently finished">
-          {finished.map((i) => (
-            <HomeCard key={i.media.key} item={i} />
-          ))}
-        </Row>
-      )}
+      {sections.map((s) => {
+        const items = started.filter((i) => inSection(s.id, i.media) && inProgress(i)).slice(0, ROW_LIMIT);
+        if (!items.length) return null;
+        const status = s.id === "audiobook" ? "listening" : "watching";
+        return (
+          <Row key={s.id} title={`${s.label} · ${s.verb}`} more={`${s.path}?status=${status}`}>
+            {items.map((i) => (
+              <HomeCard key={i.media.key} item={i} />
+            ))}
+          </Row>
+        );
+      })}
     </div>
   );
 }
 
-/** Where you are in it: "S2 · E4" for a show, "63% listened" for a book, else the year. */
-function whereAt(media: Media, state: TrackState) {
-  if (state.current) return `S${state.current.season} · E${state.current.episode}`;
-  if (media.kind === "audiobook" && state.progress) return `${Math.round(state.progress * 100)}% listened`;
-  return media.year ? String(media.year) : null;
-}
-
 function HomeCard({ item: { media, state } }: { item: Item }) {
+  const done = state.status === "completed" || state.status === "finished";
   return (
     <PosterCard
       to={`/media/${media.key}`}
@@ -98,31 +89,18 @@ function HomeCard({ item: { media, state } }: { item: Item }) {
       title={media.title}
       poster={media.poster}
       rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
-      badge={state.status === "caught_up" ? statusLabel.caught_up : undefined}
-      sub={inProgress({ media, state }) ? whereAt(media, state) : media.year ? String(media.year) : null}
+      badge={done ? undefined : statusLabel[state.status]}
+      sub={media.year ? String(media.year) : null}
       progress={completion(media, state)}
     />
   );
 }
 
-function Row({
-  title,
-  count,
-  more,
-  children,
-}: {
-  title: string;
-  count?: number;
-  more?: string;
-  children: React.ReactNode;
-}) {
+function Row({ title, more, children }: { title: string; more?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-4">
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-lg font-medium">
-          {title}
-          {count != null && <span className="ml-2 text-muted-foreground tabular-nums">{count}</span>}
-        </h2>
+        <h2 className="text-lg font-medium">{title}</h2>
         {more && (
           <Link to={more} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
             See all <ChevronRight className="size-4" />

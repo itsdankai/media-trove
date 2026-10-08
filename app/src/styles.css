@@ -250,5 +250,7 @@
   /* The font picked in Settings → Appearance (lib/themes.ts sets --app-font on <html>). */
   html {
     font-family: var(--app-font, "Inter"), ui-sans-serif, system-ui, sans-serif;
+    /* Same text width whichever font is picked (lib/themes.ts sets the value per font). */
+    font-size-adjust: var(--app-font-adjust, none);
   }
 }
