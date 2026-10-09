@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { exportAll, restore, weeklyBackup } from "./backup.ts";
-import { emailBackup, emailConfigured } from "./backup-email.ts";
+import { emailBackup, mailer } from "./backup-email.ts";
 import { connections, openDb, watchlist } from "./db.ts";
 import { appendEvents, eventsFor, project } from "./events.ts";
 import { createLibrary } from "./library.ts";
@@ -42,8 +42,10 @@ describe("emailed backups (Resend)", () => {
   };
 
   it("does nothing unless all three settings are there", async () => {
-    expect(emailConfigured({ RESEND_API_KEY: "re_test" })).toBe(false);
-    expect(await emailBackup("mediatrove-2026-10-06.json", "{}", { titles: 0, events: 0 }, {})).toBe(false);
+    expect(mailer({ RESEND_API_KEY: "re_test" })).toBeNull();
+    const meta = { titles: 0, events: 0 };
+    expect(await emailBackup(mailer({}), "me@example.com", "mediatrove-2026-10-06.json", "{}", meta)).toBe(false);
+    expect(await emailBackup(mailer(env), undefined, "mediatrove-2026-10-06.json", "{}", meta)).toBe(false);
   });
 
   it("sends the file as an attachment, to the configured address", async () => {
@@ -52,7 +54,10 @@ describe("emailed backups (Resend)", () => {
       sent = { headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) };
       return new Response("{}", { status: 200 });
     }) as unknown as typeof fetch;
-    expect(await emailBackup("mediatrove-2026-10-06.json", '{"a":1}', { titles: 3, events: 9 }, env, fake)).toBe(true);
+    const file = "mediatrove-2026-10-06.json";
+    expect(
+      await emailBackup(mailer(env, fake), env.MEDIATROVE_BACKUP_EMAIL_TO, file, '{"a":1}', { titles: 3, events: 9 }),
+    ).toBe(true);
     expect(sent).toMatchObject({
       headers: { Authorization: "Bearer re_test" },
       body: {

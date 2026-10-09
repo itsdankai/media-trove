@@ -151,7 +151,17 @@ export function combine(entries: Entry[]): AnimeExtras {
   };
 }
 
-export function createAnimeInfo(dataDir: string, fetchFn: typeof fetch = fetch) {
+// One per data folder: every person's library shares the same index instead of loading its own copy.
+const shared = new Map<string, ReturnType<typeof makeAnimeInfo>>();
+
+export function createAnimeInfo(dataDir: string, fetchFn?: typeof fetch) {
+  if (fetchFn) return makeAnimeInfo(dataDir, fetchFn); // tests pass their own fetch
+  const info = shared.get(dataDir) ?? makeAnimeInfo(dataDir, fetch);
+  shared.set(dataDir, info);
+  return info;
+}
+
+function makeAnimeInfo(dataDir: string, fetchFn: typeof fetch) {
   const cacheFile = join(dataDir, "anime-db.json");
   let ready: Promise<{ idx: Index; byTmdb: Map<string, { anilist: number[]; mal: number[] }> }> | null = null;
 

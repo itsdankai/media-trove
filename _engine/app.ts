@@ -24,7 +24,7 @@ import {
 } from "./imports/simkl.ts";
 import { parseTrakt } from "./imports/trakt.ts";
 import { ImportUserError, type Parsed, type UploadFile } from "./imports/types.ts";
-import { createLibrary } from "./library.ts";
+import { createLibrary, type Library } from "./library.ts";
 import { type MediaKind, type MetadataProvider, mediaKinds, ProviderUnavailable, parseKey } from "./metadata/types.ts";
 import { type PluginHost, PluginUserError } from "./plugins/host.ts";
 import { getSettings, updateSettings } from "./settings.ts";
@@ -48,9 +48,12 @@ export function createApp(
   db: Db,
   providers: MetadataProvider[],
   plugins?: Plugins,
-  opts: { artworkDir?: string; dataDir?: string; fetchFn?: typeof fetch } = {},
+  // dataDir: shared caches (anime lists). backupDir: where this library's weekly backups go (defaults to dataDir).
+  // lib: share the caller's library (workspaces.ts) instead of building a second one.
+  opts: { artworkDir?: string; dataDir?: string; backupDir?: string; fetchFn?: typeof fetch; lib?: Library } = {},
 ) {
-  const lib = createLibrary(db, providers, opts);
+  const backupDir = opts.backupDir ?? opts.dataDir;
+  const lib = opts.lib ?? createLibrary(db, providers, opts);
   const calendar = createCalendar(db, lib);
   const imports = opts.dataDir ? createImports(db, lib, { dataDir: opts.dataDir, fetchFn: opts.fetchFn }) : null;
   const needImports = () => {
@@ -359,7 +362,7 @@ export function createApp(
         });
       })
 
-      .get("/api/backup/status", (c) => c.json({ latest: opts.dataDir ? latestBackup(opts.dataDir) : null }))
+      .get("/api/backup/status", (c) => c.json({ latest: backupDir ? latestBackup(backupDir) : null }))
 
       .post(
         "/api/backup/restore",
@@ -576,5 +579,3 @@ export function createApp(
       })
   );
 }
-
-export type AppType = ReturnType<typeof createApp>;

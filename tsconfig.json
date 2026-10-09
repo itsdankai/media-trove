@@ -12,5 +12,5 @@
     "types": ["node"],
     "paths": { "@/*": ["./app/src/*"] }
   },
-  "include": ["_engine", "plugins", "app/src", "e2e"]
+  "include": ["_engine", "plugins", "app/src"]
 }

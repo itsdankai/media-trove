@@ -7,7 +7,6 @@ export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), ".."
 const root = projectRoot;
 
 export const dataDir = process.env.MEDIATROVE_DATA_DIR ?? join(root, "_private", "data");
-export const dbPath = join(dataDir, "mediatrove.db");
 export const appDist = join(root, "app", "dist");
 
 export function ensureDataDir() {

@@ -3,6 +3,7 @@ import { cn } from "cn";
 import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
+import { Account, People } from "@/components/AccountSettings";
 import { Confirm } from "@/components/Confirm";
 import { SyncModePicker } from "@/components/SyncModePicker";
 import { ThresholdPicker } from "@/components/ThresholdPicker";
@@ -20,6 +21,7 @@ import {
   type SyncMode,
   timeAgo,
 } from "@/lib/api";
+import { authClient } from "@/lib/auth";
 import { friendlyError } from "@/lib/errors";
 import { applyLook, effects, fonts, type Look, themes } from "@/lib/themes";
 
@@ -27,7 +29,9 @@ export function Settings() {
   const qc = useQueryClient();
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const [params, setParams] = useSearchParams();
-  const tab = settingsTabs.find((t) => t.id === params.get("tab"))?.id ?? "tracking";
+  const isAdmin = (authClient.useSession().data?.user as { role?: string } | undefined)?.role === "admin";
+  const tabs = settingsTabs.filter((t) => t.id !== "people" || isAdmin);
+  const tab = tabs.find((t) => t.id === params.get("tab"))?.id ?? "tracking";
   const [threshold, setThreshold] = useState(0.9);
   useEffect(() => {
     if (settings) setThreshold(settings.watchedThreshold);
@@ -48,8 +52,9 @@ export function Settings() {
         {/* One section at a time, so the page doesn't grow into one long scroll (builder, 2026-10-08).
             The tab is in the URL (?tab=apps), so a link or Back lands on the same one. */}
         <Tabs value={tab} onValueChange={(v) => setParams(v === "tracking" ? {} : { tab: v }, { replace: true })}>
-          <TabsList className="max-w-full">
-            {settingsTabs.map((t) => (
+          {/* Six tabs (with People) are wider than a phone: let them wrap rather than scroll the page sideways. */}
+          <TabsList className="max-w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto">
+            {tabs.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>
                 {t.label}
               </TabsTrigger>
@@ -84,6 +89,8 @@ export function Settings() {
       {tab === "apps" && <Connections />}
 
       {tab === "backups" && <Backups />}
+      {tab === "account" && <Account />}
+      {tab === "people" && <People />}
     </div>
   );
 }
@@ -93,6 +100,8 @@ const settingsTabs = [
   { id: "appearance", label: "Appearance" },
   { id: "apps", label: "Plugins" },
   { id: "backups", label: "Backups" },
+  { id: "account", label: "Account" },
+  { id: "people", label: "People" }, // admin only
 ] as const;
 
 const windows = [

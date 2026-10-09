@@ -27,7 +27,6 @@ curl -o .env https://raw.githubusercontent.com/itsdankai/media-trove/main/.env.e
 Open `.env` and fill in:
 
 - `TMDB_API_KEY` (**required**, free: themoviedb.org, then Settings, then API). Without it, movies and shows can't be found or synced.
-- `MEDIATROVE_PASSWORD` if anyone but you can reach this machine.
 - `RPDB_API_KEY` (optional, from [ratingposterdb.com](https://ratingposterdb.com)) for posters with IMDb and Rotten Tomatoes scores on them.
 
 Then:
@@ -36,8 +35,10 @@ Then:
 docker compose up -d
 ```
 
-Open http://localhost:8787 (or this machine's address, port 8787). The first screen asks one
-question, then you're in. Your library lives in `./data` next to `compose.yaml`.
+Open http://localhost:8787 (or this machine's address, port 8787). The first screen makes your
+account (the admin), the next asks one question, then you're in. Everything lives in `./data` next to
+`compose.yaml`. Make that first account straight away: until it exists, whoever opens the page first
+can claim the server.
 
 To update later: `docker compose pull && docker compose up -d`.
 
@@ -52,11 +53,16 @@ All optional except the TMDB key. Put them in `.env` and run `docker compose up 
 | Setting | What it does |
 |---|---|
 | `TMDB_API_KEY` | Movie and show data. Required. The v3 "API Key" or the v4 "Read Access Token" both work. |
-| `MEDIATROVE_PASSWORD` | Asks for this password before showing anything (any username works). **Set it whenever MediaTrove is reachable by anyone but you**, and put HTTPS in front of it (a reverse proxy) if it's reachable from the internet. |
+| `MEDIATROVE_URL` | The address people use to reach MediaTrove, e.g. `https://mediatrove.example.com`. Needed behind a reverse proxy so links in emails and Google/OIDC sign-in point to the right place. Put HTTPS in front of it if it's reachable from the internet. |
+| `MEDIATROVE_SIGNUPS` | Who can make an account: `invite` (default: only people the admin invites), `open` (anyone who can reach the page) or `closed` (nobody new). The first account can always be made. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Adds "Continue with Google" to the sign-in page. Make an OAuth client at console.cloud.google.com (type Web application) with the redirect address `<MEDIATROVE_URL>/api/auth/callback/google`. |
+| `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_NAME` | Adds a sign-in button for your own login server (Authentik, Pocket ID, Keycloak…). The discovery URL ends in `/.well-known/openid-configuration`; the redirect address is `<MEDIATROVE_URL>/api/auth/callback/oidc`; `OIDC_NAME` is the button's label. |
+| `MEDIATROVE_PASSWORD` | From before accounts. If it's set, it's asked for until the first account exists (so an upgraded server can't be claimed by a stranger), then it does nothing. |
 | `RPDB_API_KEY` | Rating posters for movies and shows: the poster with IMDb and Rotten Tomatoes scores drawn on it, from [RPDB](https://ratingposterdb.com). Anime shows its community score (MyAnimeList, AniList and others) without a key. Switch both off in Settings → Display. |
 | `AUDIBLE_REGION` | Which Audible store to search for audiobooks: us, uk, ca, au, de, fr, it, es, in, jp. Default us. |
 | `SIMKL_CLIENT_ID` | For the Simkl import, so the form doesn't ask for it (a free app from simkl.com/settings/developer). |
-| `RESEND_API_KEY`, `MEDIATROVE_BACKUP_EMAIL_TO`, `MEDIATROVE_BACKUP_EMAIL_FROM` | Email the weekly backup through [Resend](https://resend.com) (free tier: 3,000 emails a month). The sender must be on a domain you've verified with Resend. |
+| `RESEND_API_KEY`, `MEDIATROVE_EMAIL_FROM` | Email through [Resend](https://resend.com) (free tier: 3,000 emails a month): invites and password resets. The sender, e.g. `MediaTrove <mediatrove@example.com>`, must be on a domain you've verified with Resend. Without email, invite links are shown for you to send, and the admin makes password-reset links. |
+| `MEDIATROVE_BACKUP_EMAIL_TO` | Also email the admin's weekly backup to this address (needs the two above). `MEDIATROVE_BACKUP_EMAIL_FROM`, the sender's older name, still works. |
 | `MEDIATROVE_SECRET_KEY` | The key that encrypts your app logins. Normally created for you in `data/secret.key`; set this (32 bytes, base64) only if you'd rather keep it out of the data folder. |
 
 ## Connecting apps
@@ -103,17 +109,25 @@ only adds what's new, and each import can be undone.
 
 ## Backups
 
-**Settings, then Backups:** download everything as one file, or restore from one. A copy is also
-saved every week in `data/backups` (the last 8 are kept). App logins aren't in backups: reconnect
-your apps after restoring. Backing up the whole `data` folder covers everything, logins included.
+**Settings, then Backups:** download everything as one file, or restore from one. A copy of each
+person's library is also saved every week in `data/users/<id>/backups` (the last 8 are kept). App
+logins aren't in backups: reconnect your apps after restoring. Backing up the whole `data` folder
+covers everything, logins and accounts included.
 
-## Hosting it for friends
+## Accounts and friends
 
-Each MediaTrove is one person's library. To host it for others, run one copy per person: a folder
-each with its own `compose.yaml`, `.env` (with its own `MEDIATROVE_PASSWORD`) and `data`, and a
-different port each (change `"8787:8787"` to `"8788:8787"` and so on), or one subdomain each behind
-your reverse proxy. Their data lives on your server, in their folder. Accounts inside one copy are
-planned for after v0.1.
+One MediaTrove holds a library per person. The admin (the first account) invites people from
+**Settings, then People**: type their email and send them the link (it's emailed for you when email
+is set up). The link works once, for 7 days, for that address only. Each person's library, history,
+connected apps and backups are their own; nobody, the admin included, sees anyone else's in the app.
+They do live on your server, in `data/users/<id>/`.
+
+Everyone signs in with email and password, and can add a passkey (fingerprint, face or screen lock)
+and two-factor codes under **Settings, then Account**, where they can also export their data or delete
+their account. Google and your own login server are optional extras (see Settings above).
+
+Upgrading from before accounts: your existing library becomes the first account's, so make that
+account first. If `MEDIATROVE_PASSWORD` is set, the browser asks for it until then.
 
 ## Writing a plugin
 
