@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, timeAgo } from "@/lib/api";
-import { authClient, authConfig, must } from "@/lib/auth";
+import { authClient, authConfig, must, passkeyBlocker } from "@/lib/auth";
 
 function CopyLink({ link }: { link: string }) {
   const [copied, setCopied] = useState(false);
@@ -111,10 +111,13 @@ function Passkeys() {
             Sign in with your fingerprint, face or screen lock instead of typing a password.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => add.mutate()} disabled={add.isPending}>
-          <Fingerprint /> Add a passkey
-        </Button>
+        {!passkeyBlocker() && (
+          <Button variant="secondary" size="sm" onClick={() => add.mutate()} disabled={add.isPending}>
+            <Fingerprint /> Add a passkey
+          </Button>
+        )}
       </div>
+      {passkeyBlocker() && <p className="text-muted-foreground">{passkeyBlocker()}</p>}
       {list.data && list.data.length > 0 && (
         <ul className="divide-y border-t">
           {list.data.map((p) => (
