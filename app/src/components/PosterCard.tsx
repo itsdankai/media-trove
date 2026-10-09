@@ -23,12 +23,14 @@ export function Poster({
   title,
   className,
   rated,
+  starred,
 }: {
   src: string | null;
   kind: MediaKind;
   title: string;
   className?: string;
   rated?: Rated;
+  starred?: boolean;
 }) {
   const Icon = fallbackIcon[kind];
   const { on, rpdb } = useRatingPosters();
@@ -68,6 +70,14 @@ export function Poster({
           <span className="font-normal text-white/70">/10 anime</span>
         </div>
       )}
+      {starred && (
+        <span
+          title="Favorite"
+          className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-black/70 ring-1 ring-white/15"
+        >
+          <Star className="size-3.5 fill-amber-400 text-amber-400" aria-label="Favorite" />
+        </span>
+      )}
     </div>
   );
 }
@@ -81,15 +91,23 @@ type Props = {
   progress?: number;
   badge?: string;
   rated?: Rated;
+  starred?: boolean;
 };
 
-// Status and progress sit underneath the artwork; only a rating poster (Settings) draws on it.
-export function PosterCard({ to, kind, title, poster, sub, progress, badge, rated }: Props) {
+// Status and progress sit underneath the artwork; only a rating poster (Settings) and the favorite star draw on it.
+export function PosterCard({ to, kind, title, poster, sub, progress, badge, rated, starred }: Props) {
   const showBar = progress != null && progress > 0 && progress < 1;
   return (
     <Link to={to} className="group block focus:outline-none">
       <div className="poster-lift rounded-lg transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring">
-        <Poster src={poster} kind={kind} title={title} rated={rated} className="shadow-lg shadow-black/30" />
+        <Poster
+          src={poster}
+          kind={kind}
+          title={title}
+          rated={rated}
+          starred={starred}
+          className="shadow-lg shadow-black/30"
+        />
       </div>
       <div className={cn("mt-1.5 h-1 overflow-hidden rounded-full bg-muted", !showBar && "invisible")}>
         <div className="h-full bg-primary" style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />

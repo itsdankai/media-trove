@@ -193,6 +193,43 @@ describe("sign-up rules", () => {
     expect((await signUp("late@mt.test")).res.status).toBe(403);
   });
 
+  it("lets anyone who opened a group link join, until it's cancelled or 7 days pass (2026-10-09)", async () => {
+    const admin = await signUp("admin@mt.test");
+    const made = await req("/api/admin/invites", { method: "POST", cookie: admin.cookie, body: "{}" });
+    expect(made.status).toBe(201);
+    const { link, emailed } = (await made.json()) as { link: string; emailed: boolean };
+    expect(emailed).toBe(false);
+    const token = link.split("/").at(-1) as string;
+
+    expect((await signUp("no-link@mt.test")).res.status).toBe(403); // never opened the link
+    const opened = await req(`/api/invites/${token}`);
+    expect(await opened.json()).toEqual({ email: null });
+    const groupCookie = cookieOf(opened);
+    expect(groupCookie).toMatch(/^mt_invite=/);
+    expect((await signUp("one@mt.test", undefined, { cookie: groupCookie })).res.status).toBe(200);
+    expect((await signUp("two@mt.test", undefined, { cookie: groupCookie })).res.status).toBe(200);
+    const people = (await (await req("/api/admin/people", { cookie: admin.cookie })).json()) as {
+      invites: { token: string; email: string; uses: number }[];
+    };
+    expect(people.invites).toEqual([expect.objectContaining({ token, email: "", uses: 2 })]);
+
+    // Cancelled: the link and the cookie stop working at once.
+    await req(`/api/admin/invites/${token}`, { method: "DELETE", cookie: admin.cookie });
+    expect((await req(`/api/invites/${token}`)).status).toBe(404);
+    expect((await signUp("three@mt.test", undefined, { cookie: groupCookie })).res.status).toBe(403);
+
+    // Expired after 7 days.
+    const late = (await (
+      await req("/api/admin/invites", { method: "POST", cookie: admin.cookie, body: "{}" })
+    ).json()) as { link: string };
+    const lateToken = late.link.split("/").at(-1) as string;
+    const lateCookie = cookieOf(await req(`/api/invites/${lateToken}`));
+    clock += INVITE_DAYS * 24 * 60 * 60 * 1000 + 1;
+    expect((await req(`/api/invites/${lateToken}`)).status).toBe(404);
+    expect((await signUp("four@mt.test", undefined, { cookie: lateCookie })).res.status).toBe(403);
+    expect(accounts.users()).toHaveLength(3);
+  });
+
   it("follows MEDIATROVE_SIGNUPS", async () => {
     workspaces.stopAll();
     accounts.close();

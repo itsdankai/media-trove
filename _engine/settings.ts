@@ -11,6 +11,11 @@ export type Settings = {
    * season was 9 months away).
    */
   caughtUpDays: number;
+  /**
+   * A saved title stays on the Watchlist until its progress bar reaches this (0..0.9), so a movie started and
+   * dropped after ten minutes isn't lost (builder, 2026-10-09). 0 = leave as soon as anything is watched.
+   */
+  watchlistUntil: number;
   /** Posters with scores drawn on: RPDB for movies and shows (needs RPDB_API_KEY), the community score for anime. */
   ratingPosters: boolean;
   /** Settings → Appearance (2026-10-08): a colour theme and the effects switched on (app/src/lib/themes.ts). */
@@ -24,6 +29,7 @@ const defaults: Settings = {
   watchedThreshold: DEFAULT_THRESHOLD,
   setupComplete: false,
   caughtUpDays: 90,
+  watchlistUntil: 0.25,
   ratingPosters: true,
   theme: "trove",
   effects: ["underglow", "ambient"],

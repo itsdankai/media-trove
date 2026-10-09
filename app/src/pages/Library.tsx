@@ -259,7 +259,7 @@ export function Library({ section }: { section: Section }) {
       )}
 
       <PosterGrid>
-        {items.map(({ media, state }) => (
+        {items.map(({ media, state, favoritedAt }) => (
           <PosterCard
             key={media.key}
             to={`/media/${media.key}`}
@@ -269,6 +269,7 @@ export function Library({ section }: { section: Section }) {
             rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
             sub={subline(media.kind, state, media.extra.subtitle ?? null, media.year)}
             progress={completion(media, state)}
+            starred={favoritedAt != null}
             badge={state.status === "completed" || state.status === "finished" ? undefined : statusLabel[state.status]}
           />
         ))}

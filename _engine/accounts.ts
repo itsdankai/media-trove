@@ -14,6 +14,8 @@ import Database from "better-sqlite3";
 
 export const INVITE_DAYS = 7;
 const DAY = 24 * 60 * 60 * 1000;
+/** Opening a group invite link sets this cookie; the sign-up hook reads it (so Google/OIDC sign-ups count too). */
+export const GROUP_COOKIE = "mt_invite";
 export const signupModes = ["invite", "open", "closed"] as const;
 export type SignupMode = (typeof signupModes)[number];
 
@@ -42,8 +44,14 @@ export function createAccounts(opts: AccountsOptions) {
   const now = opts.now ?? Date.now;
   const sqlite = new Database(opts.file);
   sqlite.pragma("journal_mode = WAL");
+  // email '' = a group link (2026-10-09): anyone who opens it can join, as many as like, until it expires or is
+  // cancelled. uses counts them.
   sqlite.exec(`CREATE TABLE IF NOT EXISTS invites (
-    token TEXT PRIMARY KEY, email TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER)`);
+    token TEXT PRIMARY KEY, email TEXT NOT NULL, created_at INTEGER NOT NULL, used_at INTEGER,
+    uses INTEGER NOT NULL DEFAULT 0)`);
+  try {
+    sqlite.exec("ALTER TABLE invites ADD COLUMN uses INTEGER NOT NULL DEFAULT 0"); // databases from before group links
+  } catch {}
 
   const mode: SignupMode = signupModes.find((m) => m === env.MEDIATROVE_SIGNUPS) ?? "invite";
   const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET;
@@ -59,6 +67,16 @@ export function createAccounts(opts: AccountsOptions) {
     sqlite
       .prepare("SELECT token FROM invites WHERE email = ? AND used_at IS NULL AND created_at > ? LIMIT 1")
       .get(email.toLowerCase(), now() - INVITE_DAYS * DAY) as { token: string } | undefined;
+  const groupInvite = (token: string | undefined) =>
+    token
+      ? (sqlite
+          .prepare("SELECT token FROM invites WHERE token = ? AND email = '' AND created_at > ?")
+          .get(token, now() - INVITE_DAYS * DAY) as { token: string } | undefined)
+      : undefined;
+  const groupToken = (ctx: { headers?: Headers; request?: Request } | null) => {
+    const cookie = ctx?.headers?.get("cookie") ?? ctx?.request?.headers.get("cookie") ?? "";
+    return cookie.match(new RegExp(`(?:^|;\\s*)${GROUP_COOKIE}=([\\w-]+)`))?.[1];
+  };
   // Without email, password-reset links are handed to the admin instead of mailed (adminResetLink).
   const resetLinks = new Map<string, string>();
 
@@ -130,10 +148,10 @@ export function createAccounts(opts: AccountsOptions) {
       user: {
         create: {
           // Every way of joining (password, Google, OIDC) creates a user here, so the invite rule lives here.
-          before: async (user) => {
+          before: async (user, ctx) => {
             if (userCount() === 0) return { data: { ...user, role: "admin" } };
             if (mode === "open") return { data: user };
-            if (mode === "invite" && openInvite(user.email)) return { data: user };
+            if (mode === "invite" && (openInvite(user.email) || groupInvite(groupToken(ctx)))) return { data: user };
             throw new APIError("FORBIDDEN", {
               message:
                 mode === "closed"
@@ -141,11 +159,14 @@ export function createAccounts(opts: AccountsOptions) {
                   : "This server is invite-only. Ask its owner for an invite to this email address.",
             });
           },
-          after: async (user) => {
+          after: async (user, ctx) => {
             if (userCount() === 1) opts.onFirstUser?.(user);
-            sqlite
+            const own = sqlite
               .prepare("UPDATE invites SET used_at = ? WHERE email = ? AND used_at IS NULL")
               .run(now(), user.email.toLowerCase());
+            const group = groupInvite(groupToken(ctx));
+            if (!own.changes && group)
+              sqlite.prepare("UPDATE invites SET uses = uses + 1 WHERE token = ?").run(group.token);
           },
         },
       },
@@ -168,7 +189,8 @@ export function createAccounts(opts: AccountsOptions) {
       oidc: oidc ? env.OIDC_NAME || "Single sign-on" : null,
       email: Boolean(opts.mail),
     }),
-    createInvite(email: string) {
+    /** No email = a group link anyone can use for 7 days. */
+    createInvite(email = "") {
       const token = randomBytes(18).toString("base64url");
       sqlite
         .prepare("INSERT INTO invites (token, email, created_at) VALUES (?, ?, ?)")
@@ -181,14 +203,14 @@ export function createAccounts(opts: AccountsOptions) {
         | { email: string; created_at: number; used_at: number | null }
         | undefined;
       if (!row || row.used_at || row.created_at <= now() - INVITE_DAYS * DAY) return null;
-      return { email: row.email };
+      return { email: row.email || null }; // null: a group link, they type their own
     },
     invites() {
       return sqlite
         .prepare(
-          "SELECT token, email, created_at AS createdAt FROM invites WHERE used_at IS NULL AND created_at > ? ORDER BY created_at DESC",
+          "SELECT token, email, created_at AS createdAt, uses FROM invites WHERE used_at IS NULL AND created_at > ? ORDER BY created_at DESC",
         )
-        .all(now() - INVITE_DAYS * DAY) as { token: string; email: string; createdAt: number }[];
+        .all(now() - INVITE_DAYS * DAY) as { token: string; email: string; createdAt: number; uses: number }[];
     },
     revokeInvite(token: string) {
       sqlite.prepare("DELETE FROM invites WHERE token = ?").run(token);

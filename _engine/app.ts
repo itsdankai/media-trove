@@ -7,7 +7,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { BackupError, exportAll, latestBackup, restore } from "./backup.ts";
 import { createCalendar } from "./calendar.ts";
-import { connections, type Db, events, type MediaRow, media, watchlist } from "./db.ts";
+import { connections, type Db, events, favorites, type MediaRow, media, watchlist } from "./db.ts";
 import { appendEvents, eventsFor, MANUAL, project } from "./events.ts";
 import { fetchMal, parseMal } from "./imports/anime-lists.ts";
 import { parseImdb, parseLetterboxd } from "./imports/csv-exports.ts";
@@ -200,6 +200,7 @@ export function createApp(
             watchedThreshold: z.number().min(0.5).max(1).optional(),
             setupComplete: z.boolean().optional(),
             caughtUpDays: z.number().int().min(0).max(730).optional(), // 0 = any time
+            watchlistUntil: z.number().min(0).max(0.9).optional(),
             ratingPosters: z.boolean().optional(),
             theme: z
               .string()
@@ -235,11 +236,18 @@ export function createApp(
           .reverse()
           .map((e) => ({ ...e, sourceName: names[e.source] ?? e.source }));
         const saved = Boolean(db.select().from(watchlist).where(eq(watchlist.mediaKey, key)).get());
-        return c.json({ media: info, state: stateOf(info, list), events: withSource, watchlisted: saved });
+        const starred = Boolean(db.select().from(favorites).where(eq(favorites.mediaKey, key)).get());
+        return c.json({
+          media: info,
+          state: stateOf(info, list),
+          events: withSource,
+          watchlisted: saved,
+          favorited: starred,
+        });
       })
 
-      // --- watchlist ------------------------------------------------------------------------
-      .put("/api/watchlist/:key", async (c) => {
+      // --- watchlist and favorites ------------------------------------------------------------
+      .put("/api/:list{watchlist|favorites}/:key", async (c) => {
         const key = c.req.param("key");
         // A key the metadata source doesn't know (typo, removed title): not found, not a server error.
         if (
@@ -249,15 +257,17 @@ export function createApp(
           ))
         )
           return c.json({ error: "not found" }, 404);
-        db.insert(watchlist).values({ mediaKey: key, addedAt: Date.now() }).onConflictDoNothing().run();
-        return c.json({ watchlisted: true });
+        const table = c.req.param("list") === "favorites" ? favorites : watchlist;
+        db.insert(table).values({ mediaKey: key, addedAt: Date.now() }).onConflictDoNothing().run();
+        return c.json({ on: true });
       })
 
-      .delete("/api/watchlist/:key", (c) => {
-        db.delete(watchlist)
-          .where(eq(watchlist.mediaKey, c.req.param("key")))
+      .delete("/api/:list{watchlist|favorites}/:key", (c) => {
+        const table = c.req.param("list") === "favorites" ? favorites : watchlist;
+        db.delete(table)
+          .where(eq(table.mediaKey, c.req.param("key")))
           .run();
-        return c.json({ watchlisted: false });
+        return c.json({ on: false });
       })
 
       .get("/api/media/:key/season/:n", async (c) => {
@@ -303,6 +313,13 @@ export function createApp(
               .all()
               .map((w) => [w.mediaKey, w.addedAt]),
           );
+          const starred = new Map(
+            db
+              .select()
+              .from(favorites)
+              .all()
+              .map((f) => [f.mediaKey, f.addedAt]),
+          );
           const keys = [
             ...new Set([
               ...db
@@ -311,6 +328,7 @@ export function createApp(
                 .all()
                 .map((r) => r.k),
               ...saved.keys(),
+              ...starred.keys(),
             ]),
           ];
           if (!keys.length) return c.json([]);
@@ -324,11 +342,16 @@ export function createApp(
                 ? m.kind !== "audiobook" && m.extra.anime === true
                 : (!kind || m.kind === kind) && !(kind && kind !== "audiobook" && m.extra.anime === true),
             );
-          // "planned" = nothing watched yet. Shown only when it's on the watchlist (newest saved first, after
-          // everything with activity); otherwise it's a title unmarked everywhere, which stays hidden.
+          // "planned" = nothing watched yet. Shown only when it's on the watchlist or a favorite (newest saved
+          // first, after everything with activity); otherwise it's a title unmarked everywhere, which stays hidden.
           const items = rows
-            .map((m) => ({ media: m, state: stateOf(m), watchlistedAt: saved.get(m.key) ?? null }))
-            .filter((i) => i.state.status !== "planned" || i.watchlistedAt != null);
+            .map((m) => ({
+              media: m,
+              state: stateOf(m),
+              watchlistedAt: saved.get(m.key) ?? null,
+              favoritedAt: starred.get(m.key) ?? null,
+            }))
+            .filter((i) => i.state.status !== "planned" || i.watchlistedAt != null || i.favoritedAt != null);
           const when = (i: (typeof items)[number]) =>
             i.state.lastActivityAt ?? (i.watchlistedAt ? new Date(i.watchlistedAt).toISOString() : "");
           items.sort((a, b) => when(b).localeCompare(when(a)));

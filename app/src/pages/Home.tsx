@@ -6,7 +6,7 @@ import { PosterCard, PosterGrid } from "@/components/PosterCard";
 import { Card } from "@/components/ui/card";
 import { api, completion, type Media, type Section, statusLabel, type TrackState } from "@/lib/api";
 
-type Item = { media: Media; state: TrackState };
+type Item = { media: Media; state: TrackState; favoritedAt: number | null };
 
 /** Two rows of posters at the widest layout (7 columns); narrower screens show two rows of fewer. */
 const ROW_LIMIT = 14;
@@ -81,7 +81,7 @@ export function Home() {
   );
 }
 
-function HomeCard({ item: { media, state } }: { item: Item }) {
+function HomeCard({ item: { media, state, favoritedAt } }: { item: Item }) {
   const done = state.status === "completed" || state.status === "finished";
   return (
     <PosterCard
@@ -93,6 +93,7 @@ function HomeCard({ item: { media, state } }: { item: Item }) {
       badge={done ? undefined : statusLabel[state.status]}
       sub={media.year ? String(media.year) : null}
       progress={completion(media, state)}
+      starred={favoritedAt != null}
     />
   );
 }

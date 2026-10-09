@@ -184,7 +184,7 @@ export function Join() {
       const res = await fetch(`/api/invites/${encodeURIComponent(token)}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "This invite can't be used.");
-      return body as { email: string };
+      return body as { email: string | null }; // null: a group link
     },
     retry: false,
   });
@@ -206,7 +206,7 @@ export function Join() {
       title="Join MediaTrove"
       intro="You're invited. Make your account; your library starts empty and is yours alone."
     >
-      <SignUpForm email={invite.data.email} button="Create my account" />
+      <SignUpForm email={invite.data.email ?? undefined} button="Create my account" />
       <OtherWays />
     </Shell>
   );

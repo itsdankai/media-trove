@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { onWatchlist } from "../app/src/lib/api.ts";
 import { createApp } from "./app.ts";
 import { openDb } from "./db.ts";
 import { appendEvents, eventId, type NewEvent } from "./events.ts";
@@ -169,5 +170,61 @@ describe("watchlist (2026-10-07)", () => {
     await app.request("/api/watchlist/tmdb-show-95396", { method: "PUT" });
     await app.request("/api/watchlist/tmdb-show-95396", { method: "DELETE" });
     expect(await library(app)).toHaveLength(0);
+  });
+
+  it("keeps a started title on the Watchlist page until the set percentage (2026-10-09)", async () => {
+    const { app } = setup();
+    expect(((await (await app.request("/api/settings")).json()) as { watchlistUntil: number }).watchlistUntil).toBe(
+      0.25,
+    );
+    const saved = await app.request("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ watchlistUntil: 0.4 }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(((await saved.json()) as { watchlistUntil: number }).watchlistUntil).toBe(0.4);
+    await app.request("/api/watchlist/tmdb-movie-603", { method: "PUT" });
+    const shown = async (until: number) => (await library(app)).filter((i) => onWatchlist(i as never, until)).length;
+    expect(await shown(0.25)).toBe(1); // saved, never started
+    await post(app, { mediaKey: "tmdb-movie-603", kind: "progress", progress: 0.1 });
+    expect(await shown(0.25)).toBe(1); // 10%: still on it
+    expect(await shown(0)).toBe(0); // 0 = leave as soon as it's started
+    await post(app, { mediaKey: "tmdb-movie-603", kind: "progress", progress: 0.3 });
+    expect(await shown(0.25)).toBe(0); // 30%: past it
+    expect(await shown(0.5)).toBe(1);
+    await post(app, { mediaKey: "tmdb-movie-603", kind: "watched" });
+    expect(await shown(0.9)).toBe(0); // finished always leaves
+  });
+});
+
+describe("favorites (2026-10-09)", () => {
+  type Lib = { media: { key: string }; state: { status: string }; favoritedAt: number | null }[];
+  const library = async (app: ReturnType<typeof setup>["app"]) =>
+    (await (await app.request("/api/library")).json()) as Lib;
+  const favorited = async (app: ReturnType<typeof setup>["app"]) =>
+    ((await (await app.request("/api/media/tmdb-movie-603")).json()) as { favorited: boolean }).favorited;
+
+  it("stars a title, lists it even with no activity, unstars it, and survives a backup", async () => {
+    const { app } = setup();
+    expect(await favorited(app)).toBe(false);
+    expect((await app.request("/api/favorites/tmdb-movie-603", { method: "PUT" })).status).toBe(200);
+    expect(await favorited(app)).toBe(true);
+    let lib = await library(app);
+    expect(lib).toHaveLength(1);
+    expect(lib[0]).toMatchObject({ media: { key: "tmdb-movie-603" }, state: { status: "planned" } });
+    expect(lib[0].favoritedAt).toBeTypeOf("number");
+
+    const backup = await (await app.request("/api/backup")).json();
+    await app.request("/api/favorites/tmdb-movie-603", { method: "DELETE" });
+    expect(await favorited(app)).toBe(false);
+    expect(await library(app)).toHaveLength(0);
+
+    const form = new FormData();
+    form.set("file", new File([JSON.stringify(backup)], "backup.json"));
+    const restored = await app.request("/api/backup/restore", { method: "POST", body: form });
+    expect(restored.status).toBe(200);
+    lib = await library(app);
+    expect(lib[0].favoritedAt).toBeTypeOf("number");
+    expect((await app.request("/api/favorites/audible-audiobook-B0NOTREAL1", { method: "PUT" })).status).toBe(404);
   });
 });

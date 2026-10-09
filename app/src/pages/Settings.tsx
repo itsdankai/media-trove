@@ -11,6 +11,7 @@ import { ThresholdPicker } from "@/components/ThresholdPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -80,6 +81,7 @@ export function Settings() {
               )}
             </div>
             {settings && <CaughtUpWindow days={settings.caughtUpDays} />}
+            {settings && <WatchlistUntil value={settings.watchlistUntil} />}
           </Card>
         </section>
       )}
@@ -144,6 +146,39 @@ function CaughtUpWindow({ days }: { days: number }) {
       <p className="max-w-prose text-xs text-muted-foreground">
         When you've seen every aired episode. Further off than this (a new season next year), the show reads Completed
         until the date gets close.
+      </p>
+    </div>
+  );
+}
+
+/** How far into a saved title it stays on the Watchlist (builder, 2026-10-09). Saves when the slider is let go. */
+function WatchlistUntil({ value }: { value: number }) {
+  const qc = useQueryClient();
+  const [pct, setPct] = useState(Math.round(value * 100));
+  useEffect(() => setPct(Math.round(value * 100)), [value]);
+  const save = useMutation({
+    mutationFn: (v: number) => api.saveSettings({ watchlistUntil: v / 100 }),
+    onSuccess: (s) => qc.setQueryData(["settings"], s),
+  });
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex items-baseline justify-between">
+        <span className="text-sm font-medium">Keep on the watchlist until</span>
+        <span className="text-2xl font-semibold tabular-nums text-primary">{pct === 0 ? "Started" : `${pct}%`}</span>
+      </div>
+      <Slider
+        value={[pct]}
+        min={0}
+        max={90}
+        step={5}
+        onValueChange={([v]) => setPct(v)}
+        onValueCommit={([v]) => save.mutate(v)}
+        aria-label="Keep on the watchlist until"
+      />
+      <p className="max-w-prose text-xs text-muted-foreground">
+        {pct === 0
+          ? "A saved title leaves the Watchlist as soon as you start it."
+          : `A saved title stays on the Watchlist until its progress bar passes ${pct}%, so a movie you started and didn't get to finish isn't lost. Finished titles always leave it.`}
       </p>
     </div>
   );

@@ -79,10 +79,18 @@ export type NewEvent = Pick<EventRow, "mediaKey" | "kind"> & {
   progress?: number;
 };
 
+export type LibraryItem = {
+  media: Media;
+  state: TrackState;
+  watchlistedAt: number | null;
+  favoritedAt: number | null;
+};
+
 export type Settings = {
   watchedThreshold: number;
   setupComplete: boolean;
   caughtUpDays: number; // 0 = any time
+  watchlistUntil: number; // a saved title stays on the Watchlist until its progress bar reaches this
   ratingPosters: boolean; // RPDB posters for movies/shows (when the server has RPDB_API_KEY), score bar for anime
   theme: string; // lib/themes.ts
   effects: string[]; // underglow, ambient, motion, shine
@@ -174,27 +182,29 @@ function send<T>(method: string, path: string, body?: unknown) {
 }
 
 export type Person = { id: string; name: string; email: string; role: string | null; createdAt: string };
-export type Invite = { token: string; email: string; createdAt: number };
+/** email '' = a group link anyone can use; uses = how many joined through it. */
+export type Invite = { token: string; email: string; createdAt: number; uses: number };
 
 export const api = {
   // --- the admin's People page (phase 10) ---
   people: () => call<{ people: Person[]; invites: Invite[] }>("/api/admin/people"),
-  invite: (email: string) => send<{ link: string; emailed: boolean }>("POST", "/api/admin/invites", { email }),
+  /** No email: a group link. */
+  invite: (email?: string) => send<{ link: string; emailed: boolean }>("POST", "/api/admin/invites", { email }),
   revokeInvite: (token: string) => send<{ ok: true }>("DELETE", `/api/admin/invites/${encodeURIComponent(token)}`),
   resetLink: (id: string) => send<{ link: string }>("POST", `/api/admin/people/${encodeURIComponent(id)}/reset-link`),
   removePerson: (id: string) => send<{ ok: true }>("DELETE", `/api/admin/people/${encodeURIComponent(id)}`),
   config: () => call<{ tmdb: boolean; plugins: boolean; rpdb: boolean }>("/api/config"),
   search: (kind: MediaKind, q: string) => call<SearchResult[]>(`/api/search?${new URLSearchParams({ kind, q })}`),
   media: (key: string) =>
-    call<{ media: Media; state: TrackState; events: EventRow[]; watchlisted: boolean }>(`/api/media/${key}`),
-  watchlist: (key: string, on: boolean) =>
-    send<{ watchlisted: boolean }>(on ? "PUT" : "DELETE", `/api/watchlist/${key}`),
+    call<{ media: Media; state: TrackState; events: EventRow[]; watchlisted: boolean; favorited: boolean }>(
+      `/api/media/${key}`,
+    ),
+  watchlist: (key: string, on: boolean) => send<{ on: boolean }>(on ? "PUT" : "DELETE", `/api/watchlist/${key}`),
+  favorite: (key: string, on: boolean) => send<{ on: boolean }>(on ? "PUT" : "DELETE", `/api/favorites/${key}`),
   season: (key: string, n: number) => call<Episode[]>(`/api/media/${key}/season/${n}`),
   /** A library section: movies, shows (anime left out), audiobooks, or anime (movies and shows). */
   library: (section?: Section) =>
-    call<{ media: Media; state: TrackState; watchlistedAt: number | null }[]>(
-      `/api/library${section ? (section === "anime" ? "?section=anime" : `?kind=${section}`) : ""}`,
-    ),
+    call<LibraryItem[]>(`/api/library${section ? (section === "anime" ? "?section=anime" : `?kind=${section}`) : ""}`),
   calendar: (days = 60) => call<CalendarEntry[]>(`/api/calendar?days=${days}`),
   history: (limit = 100) =>
     call<
@@ -306,6 +316,14 @@ export function completion(m: Media, s: TrackState) {
   }
   if (s.progress) return s.progress;
   return s.watchCount ? 1 : 0;
+}
+
+/** On the Watchlist page: saved, and not finished or past Settings → Tracking's watchlist percentage. */
+export function onWatchlist(i: LibraryItem, until: number) {
+  if (i.watchlistedAt == null) return false;
+  if (i.state.status === "planned") return true;
+  if (["completed", "finished", "caught_up"].includes(i.state.status)) return false;
+  return completion(i.media, i.state) < until;
 }
 
 export function formatMinutes(min: number | null | undefined) {
