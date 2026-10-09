@@ -154,6 +154,8 @@ export type PluginStatus = {
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
+  // Signed out (session ended, account removed): back to the sign-in page.
+  if (res.status === 401 && !window.location.pathname.startsWith("/sign-in")) window.location.href = "/sign-in";
   const body = await res.json().catch(() => ({}));
   // Validation failures send an object, not a string; those get a plain message instead of "[object Object]".
   if (!res.ok) {
@@ -171,7 +173,16 @@ function send<T>(method: string, path: string, body?: unknown) {
   });
 }
 
+export type Person = { id: string; name: string; email: string; role: string | null; createdAt: string };
+export type Invite = { token: string; email: string; createdAt: number };
+
 export const api = {
+  // --- the admin's People page (phase 10) ---
+  people: () => call<{ people: Person[]; invites: Invite[] }>("/api/admin/people"),
+  invite: (email: string) => send<{ link: string; emailed: boolean }>("POST", "/api/admin/invites", { email }),
+  revokeInvite: (token: string) => send<{ ok: true }>("DELETE", `/api/admin/invites/${encodeURIComponent(token)}`),
+  resetLink: (id: string) => send<{ link: string }>("POST", `/api/admin/people/${encodeURIComponent(id)}/reset-link`),
+  removePerson: (id: string) => send<{ ok: true }>("DELETE", `/api/admin/people/${encodeURIComponent(id)}`),
   config: () => call<{ tmdb: boolean; plugins: boolean; rpdb: boolean }>("/api/config"),
   search: (kind: MediaKind, q: string) => call<SearchResult[]>(`/api/search?${new URLSearchParams({ kind, q })}`),
   media: (key: string) =>

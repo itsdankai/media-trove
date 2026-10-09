@@ -17,5 +17,9 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "iconLibrary": "lucide"
+  "iconLibrary": "lucide",
+  "registries": {
+    "@diceui": "https://diceui.com/r/radix-nova/{name}.json",
+    "@animateicons": "https://animateicons.in/r/{name}.json"
+  }
 }
