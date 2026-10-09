@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowLeft, BookmarkCheck, BookmarkPlus, Check, CheckCheck, Eye, RotateCcw } from "lucide-react";
+import { ArrowLeft, BookmarkCheck, BookmarkPlus, Check, CheckCheck, Eye, RotateCcw, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { Confirm } from "@/components/Confirm";
@@ -59,6 +59,7 @@ export function Detail() {
             rated={{ mediaKey: m.key, anime: m.extra.anime, score: m.extra.rating }}
             kind={m.kind}
             title={m.title}
+            starred={data.favorited}
             className="w-40 shrink-0 shadow-2xl shadow-black/50 sm:w-52"
           />
           <div className="min-w-0 flex-1 space-y-4">
@@ -77,8 +78,13 @@ export function Detail() {
               ))}
             </div>
             {m.overview && <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{m.overview}</p>}
-            {/* Once anything is watched or listened to, the title leaves the watchlist on its own. */}
-            {state.status === "planned" && <WatchlistButton mediaKey={m.key} on={data.watchlisted} />}
+            {/* A started title stays on the watchlist until Settings → Tracking's percentage; finished ones leave it. */}
+            <div className="flex flex-wrap gap-2">
+              {(data.watchlisted || !["completed", "finished", "caught_up"].includes(state.status)) && (
+                <ListButton mediaKey={m.key} list="watchlist" on={data.watchlisted} />
+              )}
+              <ListButton mediaKey={m.key} list="favorite" on={data.favorited} />
+            </div>
             {m.kind === "movie" && <MovieActions m={m} state={state} track={track} />}
             {m.kind === "audiobook" && <AudiobookActions m={m} state={state} track={track} />}
             {m.kind === "show" && <ShowSummary m={m} state={state} />}
@@ -177,19 +183,36 @@ function ratingLine(m: Media) {
   return `★ ${x.rating}/10 TMDB${n(x.voteCount)}`;
 }
 
-/** Save a title for later, or take it off the list. */
-function WatchlistButton({ mediaKey, on }: { mediaKey: string; on: boolean }) {
+const listLabels = {
+  watchlist: { on: "On your watchlist", off: "Add to watchlist" },
+  favorite: { on: "Favorite", off: "Add to favorites" },
+};
+
+/** Save a title for later or star it as a favorite, or take it off that list. */
+function ListButton({ mediaKey, list, on }: { mediaKey: string; list: "watchlist" | "favorite"; on: boolean }) {
   const qc = useQueryClient();
   const toggle = useMutation({
-    mutationFn: () => api.watchlist(mediaKey, !on),
+    mutationFn: () => api[list](mediaKey, !on),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["media", mediaKey] });
       qc.invalidateQueries({ queryKey: ["library"] });
     },
   });
   return (
-    <Button variant={on ? "secondary" : "default"} onClick={() => toggle.mutate()} disabled={toggle.isPending}>
-      {on ? <BookmarkCheck /> : <BookmarkPlus />} {on ? "On your watchlist" : "Add to watchlist"}
+    <Button
+      variant={on ? "secondary" : list === "favorite" ? "outline" : "default"}
+      onClick={() => toggle.mutate()}
+      disabled={toggle.isPending}
+      aria-pressed={on}
+    >
+      {list === "favorite" ? (
+        <Star className={cn(on && "fill-amber-400 text-amber-400")} />
+      ) : on ? (
+        <BookmarkCheck />
+      ) : (
+        <BookmarkPlus />
+      )}{" "}
+      {listLabels[list][on ? "on" : "off"]}
     </Button>
   );
 }

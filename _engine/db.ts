@@ -104,8 +104,16 @@ export const watchlist = sqliteTable("watchlist", {
   addedAt: integer("added_at").notNull(),
 });
 
+// Titles starred as favorites (2026-10-09). Same shape as the watchlist; a favorite with no activity still
+// shows on the Favorites page.
+export const favorites = sqliteTable("favorites", {
+  mediaKey: text("media_key").primaryKey(),
+  addedAt: integer("added_at").notNull(),
+});
+
 const ddl = `
 CREATE TABLE IF NOT EXISTS watchlist (media_key TEXT PRIMARY KEY, added_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS favorites (media_key TEXT PRIMARY KEY, added_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS pushes (
   connection_id TEXT NOT NULL, media_key TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL,
   action TEXT NOT NULL, at TEXT NOT NULL, status TEXT NOT NULL, pushed_at INTEGER NOT NULL,

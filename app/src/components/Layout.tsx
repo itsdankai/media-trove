@@ -12,6 +12,7 @@ import {
   Search as SearchIcon,
   Settings as SettingsIcon,
   Sparkles,
+  Star,
   Store,
   Tv,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { SettingsIcon as SettingsAnimated } from "@/components/ui/settings-icon";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SparklesIcon } from "@/components/ui/sparkles-icon";
+import { StarIcon } from "@/components/ui/star-icon";
 import { StoreIcon } from "@/components/ui/store-icon";
 import { TvIcon } from "@/components/ui/tv-icon";
 import { api } from "@/lib/api";
@@ -40,6 +42,7 @@ const nav = [
   { to: "/anime", label: "Anime", icon: Sparkles, moving: SparklesIcon },
   { to: "/audiobooks", label: "Audiobooks", icon: Headphones, moving: HeadphonesIcon },
   { to: "/watchlist", label: "Watchlist", icon: Bookmark, moving: BookmarkIcon },
+  { to: "/favorites", label: "Favorites", icon: Star, moving: StarIcon },
   { to: "/calendar", label: "Calendar", icon: CalendarDays, moving: CalendarDaysIcon },
   { to: "/history", label: "History", icon: History, moving: HistoryIcon },
 ];

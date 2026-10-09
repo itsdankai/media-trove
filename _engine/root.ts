@@ -3,8 +3,9 @@
 // routes and an invite's email address answers without a session.
 import { zValidator } from "@hono/zod-validator";
 import { type Context, Hono } from "hono";
+import { setCookie } from "hono/cookie";
 import { z } from "zod";
-import type { Accounts, Mailer } from "./accounts.ts";
+import { type Accounts, GROUP_COOKIE, INVITE_DAYS, type Mailer } from "./accounts.ts";
 import { passwordGate } from "./auth.ts";
 import type { Workspaces } from "./workspaces.ts";
 
@@ -39,10 +40,20 @@ export function createRoot(opts: {
       .use("*", async (c, next) => (accounts.userCount() === 0 ? gate(c, next) : next()))
       .get("/api/health", (c) => c.json({ ok: true }))
       .get("/api/auth-config", (c) => c.json(accounts.publicConfig()))
-      // The sign-up page fills in the invited address.
+      // The sign-up page fills in the invited address. A group link has none; opening it remembers the link in a
+      // cookie for the sign-up that follows (by password, Google or OIDC).
       .get("/api/invites/:token", (c) => {
-        const invite = accounts.invite(c.req.param("token"));
-        return invite ? c.json(invite) : c.json({ error: "This invite has been used or has expired." }, 404);
+        const token = c.req.param("token");
+        const invite = accounts.invite(token);
+        if (!invite) return c.json({ error: "This invite has been used, cancelled or has expired." }, 404);
+        if (invite.email === null)
+          setCookie(c, GROUP_COOKIE, token, {
+            path: "/",
+            httpOnly: true,
+            sameSite: "Lax",
+            maxAge: INVITE_DAYS * 86400,
+          });
+        return c.json(invite);
       })
       .on(["GET", "POST"], "/api/auth/*", (c) => accounts.auth.handler(c.req.raw))
 
@@ -58,8 +69,10 @@ export function createRoot(opts: {
         isAdmin(c) ? next() : c.json({ error: "Only the admin can do that." }, 403),
       )
       .get("/api/admin/people", (c) => c.json({ people: accounts.users(), invites: accounts.invites() }))
-      .post("/api/admin/invites", zValidator("json", z.object({ email: z.email() })), async (c) => {
+      .post("/api/admin/invites", zValidator("json", z.object({ email: z.email().optional() })), async (c) => {
         const { email } = c.req.valid("json");
+        // No email: one link for a group chat, good for 7 days and any number of people, until it's cancelled.
+        if (!email) return c.json({ link: `${siteUrl(c, env)}/join/${accounts.createInvite()}`, emailed: false }, 201);
         if (accounts.users().some((u) => u.email.toLowerCase() === email.toLowerCase()))
           return c.json({ error: "That email already has an account." }, 409);
         const token = accounts.createInvite(email);

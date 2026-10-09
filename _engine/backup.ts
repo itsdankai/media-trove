@@ -6,7 +6,7 @@
 // the same backup twice, or into a library that already has some of it, adds nothing twice.
 import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Db, events, media, settings, watchlist } from "./db.ts";
+import { type Db, events, favorites, media, settings, watchlist } from "./db.ts";
 import { appendEvents, type NewEvent } from "./events.ts";
 
 export const BACKUP_FORMAT = "mediatrove-backup";
@@ -21,6 +21,7 @@ export function exportAll(db: Db) {
     settings: db.select().from(settings).all(),
     media: db.select().from(media).all(),
     watchlist: db.select().from(watchlist).all(),
+    favorites: db.select().from(favorites).all(),
     events: db
       .select()
       .from(events)
@@ -41,6 +42,7 @@ export function restore(db: Db, data: unknown) {
   for (const m of b.media) db.insert(media).values(m).onConflictDoNothing().run();
   // Backups from before the watchlist (2026-10-07) don't have one.
   for (const w of b.watchlist ?? []) db.insert(watchlist).values(w).onConflictDoNothing().run();
+  for (const f of b.favorites ?? []) db.insert(favorites).values(f).onConflictDoNothing().run(); // since 2026-10-09
   const list: NewEvent[] = b.events.map((e) => ({
     mediaKey: e.mediaKey,
     kind: e.kind as NewEvent["kind"],

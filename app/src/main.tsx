@@ -15,7 +15,7 @@ import { Marketplace } from "./pages/Marketplace.tsx";
 import { Search } from "./pages/Search.tsx";
 import { Settings } from "./pages/Settings.tsx";
 import { Setup } from "./pages/Setup.tsx";
-import { Watchlist } from "./pages/Watchlist.tsx";
+import { Favorites, Watchlist } from "./pages/Watchlist.tsx";
 import "./styles.css";
 
 /** Everything except the sign-in pages needs a session. */
@@ -47,6 +47,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="anime" element={<Library section="anime" />} />
               <Route path="calendar" element={<Calendar />} />
               <Route path="watchlist" element={<Watchlist />} />
+              <Route path="favorites" element={<Favorites />} />
               <Route path="history" element={<History />} />
               <Route path="search" element={<Search />} />
               <Route path="media/:key" element={<Detail />} />

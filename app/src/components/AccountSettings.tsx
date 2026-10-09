@@ -1,6 +1,6 @@
 // Settings → Account (everyone) and Settings → People (the admin), phase 10.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, Fingerprint, KeyRound, LogOut, Trash2, UserPlus } from "lucide-react";
+import { Copy, Download, Fingerprint, KeyRound, Link2, LogOut, Trash2, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router";
 import { renderSVG } from "uqr";
@@ -292,8 +292,9 @@ export function People() {
         <div className="space-y-1">
           <h3 className="font-medium">Invite someone</h3>
           <p className="max-w-prose text-muted-foreground">
-            They get their own empty library; nobody sees anyone else's. The link works once, for 7 days, and only for
-            that email address.
+            They get their own empty library; nobody sees anyone else's. An email invite works once, for 7 days, and
+            only for that address. A group link is for a group chat: anyone with it can join for 7 days, until you
+            cancel it.
             {config?.signups === "open" && " (Sign-ups are open on this server, so anyone can join without one.)"}
           </p>
         </div>
@@ -312,6 +313,9 @@ export function People() {
           <Button type="submit" disabled={invite.isPending}>
             <UserPlus /> Invite
           </Button>
+          <Button type="button" variant="outline" disabled={invite.isPending} onClick={() => invite.mutate(undefined)}>
+            <Link2 /> Make a group link
+          </Button>
         </form>
         {invite.data && (
           <div className="space-y-2">
@@ -325,8 +329,12 @@ export function People() {
             {data.invites.map((i) => (
               <li key={i.token} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
-                  {i.email}
-                  <span className="text-muted-foreground"> · invited {timeAgo(i.createdAt)}</span>
+                  {i.email || "Group link"}
+                  <span className="text-muted-foreground">
+                    {i.email
+                      ? ` · invited ${timeAgo(i.createdAt)}`
+                      : ` · made ${timeAgo(i.createdAt)} · ${i.uses} joined`}
+                  </span>
                 </span>
                 <span className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(joinLink(i.token))}>
