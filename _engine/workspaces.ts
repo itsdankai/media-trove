@@ -42,7 +42,7 @@ export function createWorkspaces(opts: WorkspaceOptions) {
     const sync = createSync(db, lib, opts.host, opts.key, {
       afterSync: (id) => void writeback.push(id).catch((e) => console.error("push:", e)),
     });
-    const stops: (() => void)[] = [];
+    const stops: (() => void)[] = [writeback.stop];
     if (opts.schedule) {
       stops.push(sync.schedule());
       // Keep cached metadata current: older rows gain new fields, airing shows get their next episode.

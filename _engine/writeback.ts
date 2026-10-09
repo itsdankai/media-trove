@@ -292,7 +292,17 @@ export function createWriteback(db: Db, lib: Library, host: PluginHost, key: Buf
     };
   }
 
-  return { plan, push, pushAllSoon, setMode, settleBacklog, preview, isPushing: (id: string) => running.has(id) };
+  return {
+    plan,
+    push,
+    pushAllSoon,
+    setMode,
+    settleBacklog,
+    preview,
+    isPushing: (id: string) => running.has(id),
+    /** Drops a pending pushAllSoon, so it can't run after the database is closed (account deleted). */
+    stop: () => clearTimeout(soon),
+  };
 }
 
 export type Writeback = ReturnType<typeof createWriteback>;
