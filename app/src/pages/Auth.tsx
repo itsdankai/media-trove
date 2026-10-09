@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient, authConfig, must } from "@/lib/auth";
+import { authClient, authConfig, must, passkeyBlocker } from "@/lib/auth";
 
 // A full load, so the session the server just set is read fresh by the whole app.
 const enterApp = () => window.location.replace("/");
@@ -102,10 +102,16 @@ function PasswordSignIn() {
         </Button>
         <Problem error={signIn.error} />
       </form>
-      <Button variant="outline" className="w-full" onClick={() => passkey.mutate()} disabled={passkey.isPending}>
-        <Fingerprint /> Sign in with a passkey
-      </Button>
-      <Problem error={passkey.error} />
+      {passkeyBlocker() ? (
+        <p className="text-center text-xs text-muted-foreground">{passkeyBlocker()}</p>
+      ) : (
+        <>
+          <Button variant="outline" className="w-full" onClick={() => passkey.mutate()} disabled={passkey.isPending}>
+            <Fingerprint /> Sign in with a passkey
+          </Button>
+          <Problem error={passkey.error} />
+        </>
+      )}
       <OtherWays />
       <p className="text-center text-sm">
         <Link to="/sign-in?step=forgot" className="text-muted-foreground underline underline-offset-4">

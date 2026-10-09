@@ -15,6 +15,17 @@ export const authClient = createAuthClient({
   ],
 });
 
+/**
+ * Why passkeys can't be used on this page, or null when they can. Browsers only offer them on https
+ * (or localhost), so a plain-http tailnet/LAN address can't; a passkey also only works on the address it was made on.
+ */
+export function passkeyBlocker(): string | null {
+  if (!window.isSecureContext)
+    return "Passkeys only work on the https address. Open MediaTrove at its https:// address to use or add one.";
+  if (!window.PublicKeyCredential) return "This browser can't use passkeys. Try Chrome, Safari or Firefox.";
+  return null;
+}
+
 /** What the sign-in page offers (server: accounts.publicConfig). */
 export type AuthConfig = {
   firstRun: boolean;
