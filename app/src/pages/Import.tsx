@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, History as HistoryIcon, Undo2, UserRound } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router";
+import { FileDrop } from "@/components/FileDrop";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -242,14 +243,7 @@ function FileForm({
         start.mutate();
       }}
     >
-      <Label htmlFor={`file-${source}`}>Export file</Label>
-      <Input
-        id={`file-${source}`}
-        type="file"
-        accept={accept}
-        required
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-      />
+      <FileDrop label="Export file" accept={accept} file={file} onFile={setFile} />
       {profile && (
         <>
           <Label htmlFor={`profile-${source}`}>Profile (for the ZIP)</Label>

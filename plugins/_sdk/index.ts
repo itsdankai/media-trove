@@ -15,8 +15,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 
-export const CONTRACT_VERSION = 1;
-
 export type Field = {
   key: string;
   label: string;

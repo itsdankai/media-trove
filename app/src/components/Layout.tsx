@@ -15,28 +15,39 @@ import {
   Store,
   Tv,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type ForwardRefExoticComponent, type RefAttributes, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { BookmarkIcon } from "@/components/ui/bookmark-icon";
+import { CalendarDaysIcon } from "@/components/ui/calendar-days-icon";
+import { ClapperboardIcon } from "@/components/ui/clapperboard-icon";
+import { FileUpIcon } from "@/components/ui/file-up-icon";
+import { HeadphonesIcon } from "@/components/ui/headphones-icon";
+import { HistoryIcon } from "@/components/ui/history-icon";
+import { HouseIcon } from "@/components/ui/house-icon";
 import { Input } from "@/components/ui/input";
+import { SettingsIcon as SettingsAnimated } from "@/components/ui/settings-icon";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SparklesIcon } from "@/components/ui/sparkles-icon";
+import { StoreIcon } from "@/components/ui/store-icon";
+import { TvIcon } from "@/components/ui/tv-icon";
 import { api } from "@/lib/api";
 import { applyLook } from "@/lib/themes";
 
 const nav = [
-  { to: "/", label: "Home", icon: House, end: true },
-  { to: "/movies", label: "Movies", icon: Clapperboard },
-  { to: "/shows", label: "Shows", icon: Tv },
-  { to: "/anime", label: "Anime", icon: Sparkles },
-  { to: "/audiobooks", label: "Audiobooks", icon: Headphones },
-  { to: "/watchlist", label: "Watchlist", icon: Bookmark },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/history", label: "History", icon: History },
+  { to: "/", label: "Home", icon: House, moving: HouseIcon, end: true },
+  { to: "/movies", label: "Movies", icon: Clapperboard, moving: ClapperboardIcon },
+  { to: "/shows", label: "Shows", icon: Tv, moving: TvIcon },
+  { to: "/anime", label: "Anime", icon: Sparkles, moving: SparklesIcon },
+  { to: "/audiobooks", label: "Audiobooks", icon: Headphones, moving: HeadphonesIcon },
+  { to: "/watchlist", label: "Watchlist", icon: Bookmark, moving: BookmarkIcon },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays, moving: CalendarDaysIcon },
+  { to: "/history", label: "History", icon: History, moving: HistoryIcon },
 ];
 
 const navMore = [
-  { to: "/marketplace", label: "Marketplace", icon: Store, end: false },
-  { to: "/import", label: "Import", icon: FileUp, end: false },
-  { to: "/settings", label: "Settings", icon: SettingsIcon, end: false },
+  { to: "/marketplace", label: "Marketplace", icon: Store, moving: StoreIcon, end: false },
+  { to: "/import", label: "Import", icon: FileUp, moving: FileUpIcon, end: false },
+  { to: "/settings", label: "Settings", icon: SettingsIcon, moving: SettingsAnimated, end: false },
 ];
 
 export function Layout() {
@@ -70,22 +81,8 @@ export function Layout() {
           <img src="/assets/icon.png" alt="" className="size-7" />
           <span className="text-lg font-semibold tracking-tight">MediaTrove</span>
         </Link>
-        {[...nav, ...navMore].map(({ to, label, icon: Icon, end }, i) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                isActive && "bg-accent text-foreground font-medium",
-                i === nav.length && "mt-4",
-              )
-            }
-          >
-            <Icon className="size-4" />
-            {label}
-          </NavLink>
+        {[...nav, ...navMore].map(({ to, label, moving, end }, i) => (
+          <SideItem key={to} to={to} label={label} icon={moving} end={end} gap={i === nav.length} />
         ))}
         <div className="mt-auto space-y-1.5 px-2 text-xs leading-snug text-muted-foreground">
           {/* TMDB's terms ask for its logo and this notice, less prominent than our own branding. */}
@@ -180,5 +177,48 @@ function PhoneNav() {
         </SheetContent>
       </Sheet>
     </nav>
+  );
+}
+
+type Moving = { startAnimation: () => void; stopAnimation: () => void };
+type MovingIcon = ForwardRefExoticComponent<{ size?: number; className?: string } & RefAttributes<Moving>>;
+
+// Sidebar link whose icon plays its little animation while the row is hovered or focused
+// (the icons skip it under reduced motion).
+function SideItem({
+  to,
+  label,
+  icon: Icon,
+  end,
+  gap,
+}: {
+  to: string;
+  label: string;
+  icon: MovingIcon;
+  end?: boolean;
+  gap: boolean;
+}) {
+  const icon = useRef<Moving>(null);
+  const play = () => icon.current?.startAnimation();
+  const stop = () => icon.current?.stopAnimation();
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onMouseEnter={play}
+      onMouseLeave={stop}
+      onFocus={play}
+      onBlur={stop}
+      className={({ isActive }) =>
+        cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+          isActive && "bg-accent text-foreground font-medium",
+          gap && "mt-4",
+        )
+      }
+    >
+      <Icon ref={icon} size={16} className="flex" />
+      {label}
+    </NavLink>
   );
 }

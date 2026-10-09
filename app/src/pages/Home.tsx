@@ -1,3 +1,4 @@
+import NumberFlow from "@number-flow/react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Clapperboard, Headphones, Sparkles, Tv } from "lucide-react";
 import { Link } from "react-router";
@@ -38,7 +39,7 @@ export function Home() {
               <s.icon className="hidden size-8 shrink-0 text-primary sm:block" />
               <div>
                 <p className="text-2xl font-semibold leading-none">
-                  {started.filter((i) => inSection(s.id, i.media)).length}
+                  <NumberFlow value={started.filter((i) => inSection(s.id, i.media)).length} />
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
               </div>
