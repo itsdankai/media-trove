@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Clapperboard, Headphones, Sparkles, Tv } from "lucide-react";
 import { Link } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
+import { menuFor } from "@/components/PosterMenu";
 import { Card } from "@/components/ui/card";
 import { api, completion, type Media, type Section, statusLabel, type TrackState } from "@/lib/api";
 
-type Item = { media: Media; state: TrackState; favoritedAt: number | null };
+type Item = { media: Media; state: TrackState; watchlistedAt: number | null; favoritedAt: number | null };
 
 /** Two rows of posters at the widest layout (7 columns); narrower screens show two rows of fewer. */
 const ROW_LIMIT = 14;
@@ -81,7 +82,8 @@ export function Home() {
   );
 }
 
-function HomeCard({ item: { media, state, favoritedAt } }: { item: Item }) {
+function HomeCard({ item }: { item: Item }) {
+  const { media, state, favoritedAt } = item;
   const done = state.status === "completed" || state.status === "finished";
   return (
     <PosterCard
@@ -94,6 +96,7 @@ function HomeCard({ item: { media, state, favoritedAt } }: { item: Item }) {
       sub={media.year ? String(media.year) : null}
       progress={completion(media, state)}
       starred={favoritedAt != null}
+      menu={menuFor(item)}
     />
   );
 }

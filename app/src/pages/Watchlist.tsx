@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
+import { menuFor } from "@/components/PosterMenu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, completion, type LibraryItem, type Media, onWatchlist, type Section } from "@/lib/api";
 
@@ -94,19 +95,23 @@ function SavedPage({
       )}
 
       <PosterGrid>
-        {items.map(({ media, state, favoritedAt }) => (
-          <PosterCard
-            key={media.key}
-            to={`/media/${media.key}`}
-            kind={media.kind}
-            title={media.title}
-            poster={media.poster}
-            rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
-            starred={favoritedAt != null}
-            progress={completion(media, state)}
-            sub={[media.year, media.extra.authors?.[0]].filter(Boolean).join(" · ") || null}
-          />
-        ))}
+        {items.map((item) => {
+          const { media, state, favoritedAt } = item;
+          return (
+            <PosterCard
+              key={media.key}
+              to={`/media/${media.key}`}
+              kind={media.kind}
+              title={media.title}
+              poster={media.poster}
+              rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
+              starred={favoritedAt != null}
+              menu={menuFor(item)}
+              progress={completion(media, state)}
+              sub={[media.year, media.extra.authors?.[0]].filter(Boolean).join(" · ") || null}
+            />
+          );
+        })}
       </PosterGrid>
     </div>
   );
