@@ -313,10 +313,16 @@ export function People() {
           <Button type="submit" disabled={invite.isPending}>
             <UserPlus /> Invite
           </Button>
+        </form>
+        {/* A separate choice, so the email box doesn't look like part of it (Astra critique 2026-10-09). */}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Or share one link with a group.</span> No email needed.
+          </p>
           <Button type="button" variant="outline" disabled={invite.isPending} onClick={() => invite.mutate(undefined)}>
             <Link2 /> Make a group link
           </Button>
-        </form>
+        </div>
         {invite.data && (
           <div className="space-y-2">
             <p>{invite.data.emailed ? "Emailed. You can also send them this link:" : "Send them this link:"}</p>

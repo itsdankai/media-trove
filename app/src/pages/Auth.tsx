@@ -1,7 +1,7 @@
 // The pages you see before you're signed in (phase 10): sign in, make the first (admin) account, join by
 // invite, enter a two-factor code, and set a new password from a reset link.
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint, Gem } from "lucide-react";
+import { Fingerprint } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { Problem, say } from "@/components/Problem";
@@ -19,7 +19,7 @@ function Shell({ title, intro, children }: { title: string; intro?: ReactNode; c
     <div className="grid min-h-dvh place-items-center px-4 py-10">
       <Card className="w-full max-w-sm gap-6 p-8">
         <div className="space-y-2 text-center">
-          <Gem className="mx-auto size-10 text-primary" />
+          <img src="/assets/icon.png" alt="MediaTrove" className="mx-auto size-12" />
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {intro && <p className="text-sm text-muted-foreground">{intro}</p>}
         </div>

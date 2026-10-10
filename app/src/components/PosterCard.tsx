@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import { Clapperboard, Headphones, Star, Tv } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Link } from "react-router";
 import { type MenuInfo, PosterMenu } from "@/components/PosterMenu";
 import { api, type MediaKind } from "@/lib/api";
@@ -18,6 +18,19 @@ function useRatingPosters() {
   return { on: settings?.ratingPosters ?? false, rpdb: config?.rpdb ?? false };
 }
 
+const PHONE = "(max-width: 639px)";
+/** True at phone width; follows rotation and resizing. */
+function usePhone() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const q = window.matchMedia(PHONE);
+      q.addEventListener("change", onChange);
+      return () => q.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(PHONE).matches,
+  );
+}
+
 export function Poster({
   src,
   kind,
@@ -25,6 +38,7 @@ export function Poster({
   className,
   rated,
   starred,
+  plainOnPhone,
 }: {
   src: string | null;
   kind: MediaKind;
@@ -32,9 +46,13 @@ export function Poster({
   className?: string;
   rated?: Rated;
   starred?: boolean;
+  /** Grid cards: at phone width the RPDB strip's three scores are too small to read, so show the plain poster. */
+  plainOnPhone?: boolean;
 }) {
   const Icon = fallbackIcon[kind];
-  const { on, rpdb } = useRatingPosters();
+  const { on: ratingPosters, rpdb } = useRatingPosters();
+  const phone = usePhone();
+  const on = ratingPosters && !(plainOnPhone && phone);
   const [rpdbFailed, setRpdbFailed] = useState(false);
   // Anime: RPDB only knows IMDb / Rotten Tomatoes, so draw the anime community score (MAL, AniList…) instead.
   const animeScore = on && rated?.anime && rated.score ? rated.score : null;
@@ -109,13 +127,15 @@ export function PosterCard({ to, kind, title, poster, sub, progress, badge, rate
           title={title}
           rated={rated}
           starred={starred}
+          plainOnPhone
           className="shadow-lg shadow-black/30"
         />
       </div>
       <div className={cn("mt-1.5 h-1 overflow-hidden rounded-full bg-muted", !showBar && "invisible")}>
         <div className="h-full bg-primary" style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />
       </div>
-      <p className="mt-1.5 line-clamp-1 text-sm font-medium">{title}</p>
+      {/* Two lines, so sequels and editions can be told apart (Astra critique 2026-10-09). */}
+      <p className="mt-1.5 line-clamp-2 text-sm leading-snug font-medium">{title}</p>
       {(badge || sub) && (
         <p className="line-clamp-1 text-xs text-muted-foreground">
           {badge && <span className="font-medium text-primary">{badge}</span>}
