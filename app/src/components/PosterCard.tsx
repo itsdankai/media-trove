@@ -3,6 +3,7 @@ import { cn } from "cn";
 import { Clapperboard, Headphones, Star, Tv } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { type MenuInfo, PosterMenu } from "@/components/PosterMenu";
 import { api, type MediaKind } from "@/lib/api";
 
 const fallbackIcon = { movie: Clapperboard, show: Tv, audiobook: Headphones };
@@ -92,12 +93,14 @@ type Props = {
   badge?: string;
   rated?: Rated;
   starred?: boolean;
+  /** Right-click / long-press options; left out where the page doesn't know the title's lists (search). */
+  menu?: MenuInfo;
 };
 
 // Status and progress sit underneath the artwork; only a rating poster (Settings) and the favorite star draw on it.
-export function PosterCard({ to, kind, title, poster, sub, progress, badge, rated, starred }: Props) {
+export function PosterCard({ to, kind, title, poster, sub, progress, badge, rated, starred, menu }: Props) {
   const showBar = progress != null && progress > 0 && progress < 1;
-  return (
+  const card = (
     <Link to={to} className="group block focus:outline-none">
       <div className="poster-lift rounded-lg transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring">
         <Poster
@@ -122,6 +125,7 @@ export function PosterCard({ to, kind, title, poster, sub, progress, badge, rate
       )}
     </Link>
   );
+  return menu ? <PosterMenu info={menu}>{card}</PosterMenu> : card;
 }
 
 export function PosterGrid({ children, twoRows }: { children: React.ReactNode; twoRows?: boolean }) {

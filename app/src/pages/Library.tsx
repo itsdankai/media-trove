@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
+import { menuFor } from "@/components/PosterMenu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   api,
@@ -259,20 +260,26 @@ export function Library({ section }: { section: Section }) {
       )}
 
       <PosterGrid>
-        {items.map(({ media, state, favoritedAt }) => (
-          <PosterCard
-            key={media.key}
-            to={`/media/${media.key}`}
-            kind={media.kind}
-            title={media.title}
-            poster={media.poster}
-            rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
-            sub={subline(media.kind, state, media.extra.subtitle ?? null, media.year)}
-            progress={completion(media, state)}
-            starred={favoritedAt != null}
-            badge={state.status === "completed" || state.status === "finished" ? undefined : statusLabel[state.status]}
-          />
-        ))}
+        {items.map((item) => {
+          const { media, state, favoritedAt } = item;
+          return (
+            <PosterCard
+              key={media.key}
+              to={`/media/${media.key}`}
+              kind={media.kind}
+              title={media.title}
+              poster={media.poster}
+              rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
+              sub={subline(media.kind, state, media.extra.subtitle ?? null, media.year)}
+              progress={completion(media, state)}
+              starred={favoritedAt != null}
+              menu={menuFor(item)}
+              badge={
+                state.status === "completed" || state.status === "finished" ? undefined : statusLabel[state.status]
+              }
+            />
+          );
+        })}
       </PosterGrid>
     </div>
   );
