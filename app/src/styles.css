@@ -1,32 +1,10 @@
 @import "tailwindcss";
+@import "@/lib/duwop.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn/ui tokens. Dark is the default look; a deep ink background with a warm gold accent ("treasure").
-   These light values are the "Daylight" theme; .dark is "Trove". Other themes are further down. */
-:root,
-[data-theme="daylight"] {
-  --radius: 0.75rem;
-  --background: oklch(0.985 0.004 85);
-  --foreground: oklch(0.2 0.02 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 270);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 270);
-  /* Deep enough to read as text on paper and carry white text (both 5.4:1, WCAG AA). */
-  --primary: oklch(0.52 0.13 70);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.008 270);
-  --secondary-foreground: oklch(0.25 0.02 270);
-  --muted: oklch(0.95 0.008 270);
-  --muted-foreground: oklch(0.5 0.02 270);
-  --accent: oklch(0.94 0.02 80);
-  --accent-foreground: oklch(0.25 0.02 270);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.9 0.01 270);
-  --input: oklch(0.9 0.01 270);
-  --ring: oklch(0.52 0.13 70);
-}
+/* Themes, effects, AMOLED and the font picker come from DUWOP (lib/duwop.css, lib/theme.ts; @duwop/theme).
+   Only MediaTrove's own additions live here. */
 
 /* Calendar colours for each kind of release (TV uses the theme's gold). Used at low opacity, so they
    tint any theme's surface without fighting it. */
@@ -34,181 +12,6 @@
   --kind-anime: oklch(0.61 0.25 293);
   --kind-movie: oklch(0.69 0.17 237);
   --kind-audiobook: oklch(0.7 0.17 163);
-}
-
-.dark {
-  --background: oklch(0.16 0.015 270);
-  --foreground: oklch(0.95 0.01 85);
-  --card: oklch(0.2 0.018 270);
-  --card-foreground: oklch(0.95 0.01 85);
-  --popover: oklch(0.2 0.018 270);
-  --popover-foreground: oklch(0.95 0.01 85);
-  --primary: oklch(0.8 0.13 80);
-  --primary-foreground: oklch(0.18 0.02 270);
-  --secondary: oklch(0.26 0.02 270);
-  --secondary-foreground: oklch(0.95 0.01 85);
-  --muted: oklch(0.24 0.018 270);
-  --muted-foreground: oklch(0.68 0.02 270);
-  --accent: oklch(0.28 0.025 270);
-  --accent-foreground: oklch(0.95 0.01 85);
-  --destructive: oklch(0.65 0.2 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.8 0.13 80);
-}
-
-/* ---- Themes (Settings → Appearance; lib/themes.ts). Each dark theme only picks a hue and chroma for its
-   neutrals (--nh, --nc) and an accent; the shared rule below builds the rest, so they stay balanced.
-   Selectors aren't tied to <html>, so the theme previews in Settings use the same rules. ---- */
-
-/* The glow colours effects use. Defaults first, so each theme below can override them. */
-:root,
-[data-theme] {
-  --glow: var(--primary);
-  --glow2: var(--primary);
-}
-.dark[data-theme]:not([data-theme="trove"]) {
-  --background: oklch(0.155 var(--nc) var(--nh));
-  --foreground: oklch(0.96 calc(var(--nc) * 0.4) var(--nh));
-  --card: oklch(0.195 var(--nc) var(--nh));
-  --card-foreground: var(--foreground);
-  --popover: var(--card);
-  --popover-foreground: var(--foreground);
-  --secondary: oklch(0.255 var(--nc) var(--nh));
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(0.235 var(--nc) var(--nh));
-  --muted-foreground: oklch(0.7 calc(var(--nc) * 0.8) var(--nh));
-  --accent: oklch(0.275 calc(var(--nc) * 1.2) var(--nh));
-  --accent-foreground: var(--foreground);
-  --primary-foreground: oklch(0.16 var(--nc) var(--nh));
-  --ring: var(--primary);
-  --glow: var(--primary);
-}
-[data-theme="midnight"] {
-  --nh: 262;
-  --nc: 0.032;
-  --primary: oklch(0.72 0.17 252);
-  --glow2: oklch(0.62 0.18 290);
-}
-[data-theme="ember"] {
-  --nh: 40;
-  --nc: 0.014;
-  --primary: oklch(0.72 0.18 45);
-  --glow2: oklch(0.6 0.2 25);
-}
-[data-theme="forest"] {
-  --nh: 165;
-  --nc: 0.022;
-  --primary: oklch(0.76 0.15 155);
-  --glow2: oklch(0.7 0.12 120);
-}
-[data-theme="synthwave"] {
-  --nh: 300;
-  --nc: 0.045;
-  --primary: oklch(0.72 0.24 345);
-  --glow2: oklch(0.8 0.14 200);
-}
-[data-theme="rose"] {
-  --nh: 350;
-  --nc: 0.025;
-  --primary: oklch(0.8 0.12 5);
-  --glow2: oklch(0.7 0.13 320);
-}
-[data-theme="arctic"] {
-  --nh: 230;
-  --nc: 0.022;
-  --primary: oklch(0.85 0.1 210);
-  --glow2: oklch(0.75 0.09 250);
-}
-[data-theme="mono"] {
-  --nh: 0;
-  --nc: 0;
-  --primary: oklch(0.93 0 0);
-  --glow2: oklch(0.6 0 0);
-}
-[data-theme="trove"] {
-  --glow2: oklch(0.6 0.1 280);
-}
-
-/* AMOLED: true black behind everything (pixels off on OLED screens), with surfaces just above black so
-   cards still read. Works on every dark theme; later and more specific than the theme rules above. */
-.dark[data-theme][data-amoled] {
-  --background: oklch(0 0 0);
-  --card: oklch(0.13 var(--nc, 0.015) var(--nh, 270));
-  --popover: oklch(0.13 var(--nc, 0.015) var(--nh, 270));
-  --muted: oklch(0.17 var(--nc, 0.015) var(--nh, 270));
-  --secondary: oklch(0.2 var(--nc, 0.015) var(--nh, 270));
-  --accent: oklch(0.21 var(--nc, 0.015) var(--nh, 270));
-}
-
-/* ---- Effects: words in html[data-fx]. ---- */
-
-/* Underglow: posters lift and glow in the theme's colour (the Stick Bird store's card hover). */
-[data-fx~="underglow"] .poster-lift {
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.25s ease;
-}
-[data-fx~="underglow"] .group:hover .poster-lift,
-[data-fx~="underglow"] .group:focus-visible .poster-lift {
-  box-shadow:
-    0 20px 38px -14px color-mix(in oklch, var(--glow) 75%, transparent),
-    0 0 0 1px color-mix(in oklch, var(--glow) 50%, transparent);
-}
-
-/* Ambient glow: a soft wash of the theme's two colours, fixed behind everything. */
-.fx-ambient {
-  display: none;
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(38% 32% at 18% 12%, color-mix(in oklch, var(--glow) 16%, transparent), transparent 70%),
-    radial-gradient(34% 30% at 82% 88%, color-mix(in oklch, var(--glow2) 13%, transparent), transparent 70%);
-}
-[data-fx~="ambient"] .fx-ambient {
-  display: block;
-}
-[data-fx~="motion"] .fx-ambient {
-  animation: fx-drift 45s ease-in-out infinite alternate;
-}
-@keyframes fx-drift {
-  to {
-    transform: translate(7%, -5%) rotate(10deg) scale(1.12);
-  }
-}
-
-/* Poster shine: a sweep of light across the poster on hover. */
-[data-fx~="shine"] .poster-lift {
-  position: relative;
-  overflow: hidden;
-}
-[data-fx~="shine"] .poster-lift::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.2) 50%, transparent 65%);
-  translate: -130% 0;
-}
-[data-fx~="shine"] .group:hover .poster-lift::after {
-  translate: 130% 0;
-  transition: translate 0.8s ease;
-}
-
-/* Anyone who asked their system for less motion gets none of it. ("[data-fx] .x" outranks the rules above.) */
-@media (prefers-reduced-motion: reduce) {
-  [data-fx] .fx-ambient {
-    animation: none;
-  }
-  [data-fx] .group .poster-lift {
-    transition: none;
-  }
-  [data-fx] .poster-lift::after {
-    display: none;
-  }
 }
 
 @theme inline {
@@ -237,7 +40,7 @@
   --color-kind-anime: var(--kind-anime);
   --color-kind-movie: var(--kind-movie);
   --color-kind-audiobook: var(--kind-audiobook);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--app-font, "Inter"), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -246,11 +49,5 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-  }
-  /* The font picked in Settings → Appearance (lib/themes.ts sets --app-font on <html>). */
-  html {
-    font-family: var(--app-font, "Inter"), ui-sans-serif, system-ui, sans-serif;
-    /* Same text width whichever font is picked (lib/themes.ts sets the value per font). */
-    font-size-adjust: var(--app-font-adjust, none);
   }
 }

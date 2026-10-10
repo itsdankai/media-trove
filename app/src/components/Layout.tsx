@@ -33,7 +33,7 @@ import { StarIcon } from "@/components/ui/star-icon";
 import { StoreIcon } from "@/components/ui/store-icon";
 import { TvIcon } from "@/components/ui/tv-icon";
 import { api } from "@/lib/api";
-import { applyLook } from "@/lib/themes";
+import { applyLook } from "@/lib/theme";
 
 const nav = [
   { to: "/", label: "Home", icon: House, moving: HouseIcon, end: true },

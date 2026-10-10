@@ -9,28 +9,8 @@
     <link rel="apple-touch-icon" href="/assets/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
-    <script>
-      // The saved look (lib/themes.ts applyLook), applied before the app loads so there's no flash.
-      try {
-        const look = JSON.parse(localStorage.getItem("mediatrove-look") || "null");
-        if (look && look.effects) {
-          const html = document.documentElement;
-          html.dataset.theme = look.theme;
-          html.dataset.fx = look.effects.join(" ");
-          html.classList.toggle("dark", look.theme !== "daylight");
-          html.toggleAttribute("data-amoled", look.amoled);
-          html.style.setProperty("--app-font", look.family ? '"' + look.family + '"' : "system-ui");
-          if (look.adjust) html.style.setProperty("--app-font-adjust", String(look.adjust));
-          if (look.url) {
-            const link = document.createElement("link");
-            link.id = "app-font";
-            link.rel = "stylesheet";
-            link.href = look.url;
-            document.head.append(link);
-          }
-        }
-      } catch {}
-    </script>
+    <!-- The saved look (DUWOP boot, app/public/duwop-boot.js), applied before the app loads so there's no flash. -->
+    <script src="/duwop-boot.js" data-key="mediatrove-look"></script>
   </head>
   <body>
     <div id="root"></div>
