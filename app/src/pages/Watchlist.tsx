@@ -69,7 +69,7 @@ function SavedPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">{title}</h1>
           <p className="text-sm text-muted-foreground">{data ? `${saved.length} ${counted}` : " "}</p>
         </div>
         <Tabs value={tab} onValueChange={(v) => setParams(v === "all" ? {} : { type: v }, { replace: true })}>

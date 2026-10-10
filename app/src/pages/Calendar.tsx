@@ -38,7 +38,7 @@ export function Calendar() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">Calendar</h1>
           <p className="text-sm text-muted-foreground">
             New episodes of shows you watch, new movies in franchises you've seen, and new books by your authors.
           </p>
