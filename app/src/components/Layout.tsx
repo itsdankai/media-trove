@@ -79,7 +79,9 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
-      <div className="fx-ambient" aria-hidden="true" />
+      <div className="fx-ambient" aria-hidden="true">
+        <div className="fx-horizon" />
+      </div>
       <aside className="hidden md:flex flex-col gap-1 border-r bg-card/40 p-4 sticky top-0 h-dvh">
         <Link
           to="/"
