@@ -32,7 +32,7 @@ const defaults: Settings = {
   caughtUpDays: 90,
   watchlistUntil: 0.25,
   ratingPosters: true,
-  theme: "trove",
+  theme: "duskwood",
   effects: ["underglow", "ambient"],
   amoled: false,
   font: "inter",

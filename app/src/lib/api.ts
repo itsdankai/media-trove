@@ -327,6 +327,10 @@ export function onWatchlist(i: LibraryItem, until: number) {
   return completion(i.media, i.state) < until;
 }
 
+/** Whether a release date (YYYY-MM-DD) has come, in the viewer's own time zone. No date counts as out:
+ *  older catalogue entries often lack one, and blocking them would be worse than allowing a stray mark. */
+export const isOut = (date: string | null | undefined) => !date || date <= new Date().toLocaleDateString("sv");
+
 export function formatMinutes(min: number | null | undefined) {
   if (!min) return null;
   const h = Math.floor(min / 60);

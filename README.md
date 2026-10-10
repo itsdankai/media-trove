@@ -6,7 +6,7 @@ A self-hosted tracker for everything you watch and listen to: movies, TV shows, 
 audiobooks, with more media types to come.
 
 - **Your library**, one page per kind, with filters (status, genre, year, rating, tags).
-- **A plugin marketplace.** Connect Stremio, Nuvio, Plex, Jellyfin, Emby, Kodi or Audiobookshelf
+- **Plugins for your apps.** Connect Stremio, Nuvio, Plex, Jellyfin, Emby, Kodi or Audiobookshelf
   with your server and login, and what you watch is tracked automatically. Stremio, Nuvio and Jellyfin
   can also be kept in sync: mark something in MediaTrove and it's marked there too.
 - **A release calendar** of new episodes, sequels and audiobooks from authors you follow.
@@ -67,7 +67,7 @@ All optional except the TMDB key. Put them in `.env` and run `docker compose up 
 
 ## Connecting apps
 
-Open **Marketplace**, pick your app, and sign in. MediaTrove keeps a session token (encrypted), never
+Open **Plugins**, pick your app, and sign in. MediaTrove keeps a session token (encrypted), never
 your password. For apps that support it, choose how to keep them in sync:
 
 - **Off:** MediaTrove only reads.

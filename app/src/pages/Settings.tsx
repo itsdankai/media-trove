@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
+import { Download, Plug, RefreshCw, RotateCcw, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Account, People } from "@/components/AccountSettings";
@@ -302,16 +302,16 @@ function Connections() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Connected plugins</h2>
         <Button asChild size="sm" variant="outline">
-          <Link to="/marketplace">
-            <Store /> Marketplace
+          <Link to="/plugins">
+            <Plug /> All plugins
           </Link>
         </Button>
       </div>
       {conns.length === 0 && (
         <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Nothing connected yet. Find your apps in the{" "}
-          <Link to="/marketplace" className="text-primary hover:underline">
-            marketplace
+          Nothing connected yet. Find your apps on the{" "}
+          <Link to="/plugins" className="text-primary hover:underline">
+            Plugins page
           </Link>
           .
         </p>
@@ -346,7 +346,7 @@ function Connections() {
                 </Button>
                 <Confirm
                   title={`Disconnect ${name(c.pluginId)}?`}
-                  description={`MediaTrove forgets the login for ${c.accountName} and stops syncing it. Everything it already brought in stays in your library. You can connect it again from the Marketplace.`}
+                  description={`MediaTrove forgets the login for ${c.accountName} and stops syncing it. Everything it already brought in stays in your library. You can connect it again from Plugins.`}
                   action="Disconnect"
                   onConfirm={() => remove.mutate(c.id)}
                 >

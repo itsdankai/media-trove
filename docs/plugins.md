@@ -140,6 +140,6 @@ Any language works, as long as it serves those three routes.
 
 ## Adding yours
 
-- **Your own instance:** in the Marketplace, open "Add a plugin by URL" and paste your
+- **Your own instance:** on the Plugins page, open "Add a plugin by URL" and paste your
   `https://…/manifest.json`. Or set `MEDIATROVE_PLUGIN_URLS` to a comma-separated list.
 - **For everyone:** open a pull request that adds an entry to `plugins/catalog.json`.

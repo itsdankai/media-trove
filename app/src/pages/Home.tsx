@@ -1,9 +1,15 @@
 import NumberFlow from "@number-flow/react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Clapperboard, Headphones, Sparkles, Tv } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { type ReactNode, useRef } from "react";
 import { Link } from "react-router";
+import type { Moving, MovingIcon } from "@/components/Layout";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
-import { menuFor } from "@/components/PosterMenu";
+import { menuFor, menuForKey } from "@/components/PosterMenu";
+import { ClapperboardIcon } from "@/components/ui/clapperboard-icon";
+import { HeadphonesIcon } from "@/components/ui/headphones-icon";
+import { SparklesIcon } from "@/components/ui/sparkles-icon";
+import { TvIcon } from "@/components/ui/tv-icon";
 import {
   api,
   type CalendarEntry,
@@ -20,12 +26,33 @@ type Item = { media: Media; state: TrackState; watchlistedAt: number | null; fav
 /** Two rows of posters at the widest layout (7 columns); narrower screens show two rows of fewer. */
 const ROW_LIMIT = 14;
 
-const sections: { id: Section; label: string; path: string; icon: typeof Tv }[] = [
-  { id: "movie", label: "Movies", path: "/movies", icon: Clapperboard },
-  { id: "show", label: "Shows", path: "/shows", icon: Tv },
-  { id: "anime", label: "Anime", path: "/anime", icon: Sparkles },
-  { id: "audiobook", label: "Audiobooks", path: "/audiobooks", icon: Headphones },
+// The same animated icons as the sidebar, so they play on hover there and here alike (builder, 2026-10-10).
+const sections: { id: Section; label: string; path: string; icon: MovingIcon }[] = [
+  { id: "movie", label: "Movies", path: "/movies", icon: ClapperboardIcon },
+  { id: "show", label: "Shows", path: "/shows", icon: TvIcon },
+  { id: "anime", label: "Anime", path: "/anime", icon: SparklesIcon },
+  { id: "audiobook", label: "Audiobooks", path: "/audiobooks", icon: HeadphonesIcon },
 ];
+
+/** One count in the strip: its icon plays while the pill is hovered or focused. */
+function SectionLink({ path, icon: Icon, children }: { path: string; icon: MovingIcon; children: ReactNode }) {
+  const icon = useRef<Moving>(null);
+  const play = () => icon.current?.startAnimation();
+  const stop = () => icon.current?.stopAnimation();
+  return (
+    <Link
+      to={path}
+      onMouseEnter={play}
+      onMouseLeave={stop}
+      onFocus={play}
+      onBlur={stop}
+      className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+    >
+      <Icon ref={icon} size={16} className="flex text-primary" />
+      {children}
+    </Link>
+  );
+}
 
 /** Same split as the library pages: anime (movies and shows) has its own section. */
 const inSection = (s: Section, m: Media) =>
@@ -49,17 +76,12 @@ export function Home() {
       {/* The collection totals, kept as a compact strip of links to each library page. */}
       <nav aria-label="Your library" className="flex flex-wrap gap-2">
         {sections.map((s) => (
-          <Link
-            key={s.id}
-            to={s.path}
-            className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-          >
-            <s.icon className="size-4 text-primary" />
+          <SectionLink key={s.id} path={s.path} icon={s.icon}>
             <span className="font-semibold tabular-nums text-primary">
               <NumberFlow value={started.filter((i) => inSection(s.id, i.media)).length} />
             </span>
             <span className="text-muted-foreground">{s.label}</span>
-          </Link>
+          </SectionLink>
         ))}
       </nav>
 
@@ -91,6 +113,7 @@ export function Home() {
               poster={e.poster}
               badge={dayName(e.date)}
               sub={e.label || null}
+              menu={menuForKey(data, e.key, e.kind, e.date)}
             />
           ))}
         </Row>

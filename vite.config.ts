@@ -8,5 +8,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./app/src", import.meta.url)) } },
   build: { outDir: "dist", emptyOutDir: true },
-  server: { proxy: { "/api": "http://localhost:8787" } },
+  // Keep the browser's Host header: sign-in trusts same-host origins, and the shorthand form rewrote it to :8787.
+  server: { proxy: { "/api": { target: "http://localhost:8787", changeOrigin: false } } },
 });

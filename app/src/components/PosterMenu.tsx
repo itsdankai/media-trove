@@ -9,7 +9,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { api, type MediaKind } from "@/lib/api";
+import { api, isOut, type LibraryItem, type MediaKind } from "@/lib/api";
 
 /** What the poster menu needs to know about a title (from the library list). */
 export type MenuInfo = {
@@ -17,7 +17,8 @@ export type MenuInfo = {
   kind: MediaKind;
   watchlisted: boolean;
   favorited: boolean;
-  done: boolean; // watched / finished: no "mark" item
+  done: boolean; // watched / finished / caught up: no "mark" item, and no "add to watchlist" (same as the title page)
+  out: boolean; // released: nothing to mark before then (builder 2026-10-10)
 };
 
 /**
@@ -36,7 +37,7 @@ export function PosterMenu({ info, children }: { info: MenuInfo; children: React
     },
   });
   const { mediaKey, kind } = info;
-  const mark = info.done ? null : kind === "movie" ? "watched" : kind === "audiobook" ? "finished" : null;
+  const mark = info.done || !info.out ? null : kind === "movie" ? "watched" : kind === "audiobook" ? "finished" : null;
 
   return (
     <ContextMenu
@@ -62,10 +63,12 @@ export function PosterMenu({ info, children }: { info: MenuInfo; children: React
           <ExternalLink /> Open
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => run.mutate(() => api.watchlist(mediaKey, !info.watchlisted))}>
-          {info.watchlisted ? <BookmarkMinus /> : <BookmarkPlus />}
-          {info.watchlisted ? "Remove from watchlist" : "Add to watchlist"}
-        </ContextMenuItem>
+        {(info.watchlisted || !info.done) && (
+          <ContextMenuItem onSelect={() => run.mutate(() => api.watchlist(mediaKey, !info.watchlisted))}>
+            {info.watchlisted ? <BookmarkMinus /> : <BookmarkPlus />}
+            {info.watchlisted ? "Remove from watchlist" : "Add to watchlist"}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onSelect={() => run.mutate(() => api.favorite(mediaKey, !info.favorited))}>
           {info.favorited ? <StarOff /> : <Star />}
           {info.favorited ? "Remove from favorites" : "Add to favorites"}
@@ -80,9 +83,19 @@ export function PosterMenu({ info, children }: { info: MenuInfo; children: React
   );
 }
 
+/** The menu info for any title by key (calendar, Up next): from the library when it's there, otherwise a title
+ *  you haven't touched yet (the server fetches it on demand, so it can still go on the watchlist). */
+export const menuForKey = (library: LibraryItem[], key: string, kind: MediaKind, date?: string): MenuInfo => {
+  const item = library.find((i) => i.media.key === key);
+  const info = item
+    ? menuFor(item)
+    : { mediaKey: key, kind, watchlisted: false, favorited: false, done: false, out: true };
+  return { ...info, out: info.out && isOut(date) };
+};
+
 /** The menu info for a library item. */
 export const menuFor = (i: {
-  media: { key: string; kind: MediaKind };
+  media: { key: string; kind: MediaKind; extra?: { releaseDate?: string | null } };
   state: { status: string };
   watchlistedAt: number | null;
   favoritedAt: number | null;
@@ -91,5 +104,6 @@ export const menuFor = (i: {
   kind: i.media.kind,
   watchlisted: i.watchlistedAt != null,
   favorited: i.favoritedAt != null,
-  done: i.state.status === "completed" || i.state.status === "finished",
+  done: ["completed", "finished", "caught_up"].includes(i.state.status),
+  out: isOut(i.media.extra?.releaseDate),
 });

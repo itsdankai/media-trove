@@ -9,11 +9,11 @@ import {
   History,
   House,
   Menu,
+  Plug,
   Search as SearchIcon,
   Settings as SettingsIcon,
   Sparkles,
   Star,
-  Store,
   Tv,
 } from "lucide-react";
 import { type FormEvent, type ForwardRefExoticComponent, type RefAttributes, useEffect, useRef, useState } from "react";
@@ -26,14 +26,15 @@ import { HeadphonesIcon } from "@/components/ui/headphones-icon";
 import { HistoryIcon } from "@/components/ui/history-icon";
 import { HouseIcon } from "@/components/ui/house-icon";
 import { Input } from "@/components/ui/input";
+import { PlugIcon } from "@/components/ui/plug-icon";
 import { SettingsIcon as SettingsAnimated } from "@/components/ui/settings-icon";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SparklesIcon } from "@/components/ui/sparkles-icon";
 import { StarIcon } from "@/components/ui/star-icon";
-import { StoreIcon } from "@/components/ui/store-icon";
 import { TvIcon } from "@/components/ui/tv-icon";
 import { api } from "@/lib/api";
 import { applyLook } from "@/lib/theme";
+import { PopcornRain } from "./popcorn";
 
 const nav = [
   { to: "/", label: "Home", icon: House, moving: HouseIcon, end: true },
@@ -48,7 +49,7 @@ const nav = [
 ];
 
 const navMore = [
-  { to: "/marketplace", label: "Marketplace", icon: Store, moving: StoreIcon, end: false },
+  { to: "/plugins", label: "Plugins", icon: Plug, moving: PlugIcon, end: false },
   { to: "/import", label: "Import", icon: FileUp, moving: FileUpIcon, end: false },
   { to: "/settings", label: "Settings", icon: SettingsIcon, moving: SettingsAnimated, end: false },
 ];
@@ -82,6 +83,7 @@ export function Layout() {
       <div className="fx-ambient" aria-hidden="true">
         <div className="fx-horizon" />
       </div>
+      <PopcornRain />
       <aside className="hidden md:flex flex-col gap-1 border-r bg-card/40 p-4 sticky top-0 h-dvh">
         <Link
           to="/"
@@ -190,8 +192,8 @@ function PhoneNav() {
   );
 }
 
-type Moving = { startAnimation: () => void; stopAnimation: () => void };
-type MovingIcon = ForwardRefExoticComponent<{ size?: number; className?: string } & RefAttributes<Moving>>;
+export type Moving = { startAnimation: () => void; stopAnimation: () => void };
+export type MovingIcon = ForwardRefExoticComponent<{ size?: number; className?: string } & RefAttributes<Moving>>;
 
 // Sidebar link whose icon plays its little animation while the row is hovered or focused
 // (the icons skip it under reduced motion).

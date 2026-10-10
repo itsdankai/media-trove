@@ -9,9 +9,9 @@ import { type CSSProperties, type ReactNode, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import {
+  allEffects,
   allowedThemes,
   applyLook,
-  effects,
   fonts,
   type Look,
   loadLook,
@@ -27,7 +27,7 @@ export function Appearance({
 }: {
   className?: string;
   onChange?: (look: Look) => void;
-  /** App-specific settings shown at the bottom of the card (e.g. MediaTrove's rating posters). */
+  /** App-specific settings shown at the bottom of the card (e.g. a toggle only this app has). */
   children?: ReactNode;
 }) {
   const [look, setLook] = useState<Look>(loadLook);
@@ -133,7 +133,7 @@ export function Appearance({
       </div>
       <div className="space-y-3 border-t pt-5">
         <p className="text-sm font-medium">Effects</p>
-        {effects.map((e) => (
+        {allEffects.map((e) => (
           <label key={e.id} htmlFor={`duwop-fx-${e.id}`} className="flex items-center gap-3 text-sm">
             <Switch
               id={`duwop-fx-${e.id}`}

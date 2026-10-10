@@ -17,7 +17,7 @@ export function Setup() {
     mutationFn: () => api.saveSettings({ watchedThreshold: threshold, setupComplete: true }),
     onSuccess: (s) => {
       qc.setQueryData(["settings"], s);
-      navigate("/marketplace");
+      navigate("/plugins");
     },
   });
 
