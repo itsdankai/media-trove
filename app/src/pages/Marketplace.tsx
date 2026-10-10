@@ -21,7 +21,7 @@ export function Marketplace() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">Marketplace</h1>
         <p className="text-sm text-muted-foreground">
           Connect the apps you watch and listen in. MediaTrove reads your activity there. For apps that support it, you
           can also choose to keep them in sync with MediaTrove.

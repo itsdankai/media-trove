@@ -30,7 +30,7 @@ export function History() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">History</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">History</h1>
       {!isLoading && data.length === 0 && <p className="text-muted-foreground">Nothing tracked yet.</p>}
       {[...days].map(([day, groups]) => (
         <section key={day} className="space-y-2">

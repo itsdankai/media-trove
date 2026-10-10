@@ -48,7 +48,7 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">Settings</h1>
         {/* One section at a time, so the page doesn't grow into one long scroll (builder, 2026-10-08).
             The tab is in the URL (?tab=apps), so a link or Back lands on the same one. */}
         <Tabs value={tab} onValueChange={(v) => setParams(v === "tracking" ? {} : { tab: v }, { replace: true })}>

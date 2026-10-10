@@ -89,7 +89,7 @@ export function Layout() {
           aria-label="MediaTrove home"
         >
           <img src="/assets/icon.png" alt="" className="size-7" />
-          <span className="text-lg font-semibold tracking-tight">MediaTrove</span>
+          <span className="fx-neon text-lg font-semibold tracking-tight">MediaTrove</span>
         </Link>
         {[...nav, ...navMore].map(({ to, label, moving, end }, i) => (
           <SideItem key={to} to={to} label={label} icon={moving} end={end} gap={i === nav.length} />
