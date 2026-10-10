@@ -1,5 +1,11 @@
 {
   "files": { "includes": ["_engine/**", "plugins/**", "app/src/**", "!app/src/components/ui", "*.ts"] },
   "formatter": { "indentStyle": "space", "lineWidth": 120 },
-  "css": { "parser": { "tailwindDirectives": true } }
+  "css": { "parser": { "tailwindDirectives": true } },
+  "overrides": [
+    {
+      "includes": ["app/src/lib/duwop.css"],
+      "linter": { "rules": { "style": { "noDescendingSpecificity": "off" } } }
+    }
+  ]
 }

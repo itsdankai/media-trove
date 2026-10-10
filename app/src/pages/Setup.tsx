@@ -26,7 +26,7 @@ export function Setup() {
       <Card className="w-full max-w-md gap-8 p-8">
         <div className="space-y-2 text-center">
           <Gem className="mx-auto size-10 text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">Welcome to MediaTrove</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">Welcome to MediaTrove</h1>
           <p className="text-sm text-muted-foreground">
             One quick choice, then you can connect your apps. You can change this any time in Settings.
           </p>

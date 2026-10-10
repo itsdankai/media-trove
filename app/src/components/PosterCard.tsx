@@ -131,7 +131,7 @@ export function PosterCard({ to, kind, title, poster, sub, progress, badge, rate
           className="shadow-lg shadow-black/30"
         />
       </div>
-      <div className={cn("mt-1.5 h-1 overflow-hidden rounded-full bg-muted", !showBar && "invisible")}>
+      <div className={cn("fx-meter mt-1.5 h-1 overflow-hidden rounded-full bg-muted", !showBar && "invisible")}>
         <div className="h-full bg-primary" style={{ width: `${Math.round((progress ?? 0) * 100)}%` }} />
       </div>
       {/* Two lines, so sequels and editions can be told apart (Astra critique 2026-10-09). */}

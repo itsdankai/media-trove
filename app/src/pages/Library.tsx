@@ -156,7 +156,7 @@ export function Library({ section }: { section: Section }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">{title[section]}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">{title[section]}</h1>
           <p className="text-sm text-muted-foreground">
             {data ? (filtered ? `${items.length} of ${all.length} tracked` : `${all.length} tracked`) : " "}
           </p>
