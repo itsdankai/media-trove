@@ -1,6 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowLeft, BookmarkCheck, BookmarkPlus, Check, CheckCheck, Eye, RotateCcw, Star } from "lucide-react";
+import {
+  ArrowLeft,
+  BookmarkCheck,
+  BookmarkPlus,
+  CalendarClock,
+  Check,
+  CheckCheck,
+  Eye,
+  RotateCcw,
+  Star,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { Confirm } from "@/components/Confirm";
@@ -16,6 +26,7 @@ import {
   completion,
   type EventRow,
   formatMinutes,
+  isOut,
   kindPath,
   type Media,
   type MediaKind,
@@ -86,8 +97,12 @@ export function Detail() {
               )}
               <ListButton mediaKey={m.key} list="favorite" on={data.favorited} />
             </div>
-            {m.kind === "movie" && <MovieActions m={m} state={state} track={track} />}
-            {m.kind === "audiobook" && <AudiobookActions m={m} state={state} track={track} />}
+            {/* Nothing to watch or listen to before it's out: say when instead (builder 2026-10-10). */}
+            {m.kind !== "show" && !isOut(m.extra.releaseDate) && <ComesOut date={m.extra.releaseDate} />}
+            {m.kind === "movie" && isOut(m.extra.releaseDate) && <MovieActions m={m} state={state} track={track} />}
+            {m.kind === "audiobook" && isOut(m.extra.releaseDate) && (
+              <AudiobookActions m={m} state={state} track={track} />
+            )}
             {m.kind === "show" && <ShowSummary m={m} state={state} />}
             {m.overview && <Overview text={m.overview} />}
           </div>
@@ -245,6 +260,15 @@ function ListButton({ mediaKey, list, on }: { mediaKey: string; list: "watchlist
       )}{" "}
       {listLabels[list][on ? "on" : "off"]}
     </Button>
+  );
+}
+
+function ComesOut({ date }: { date?: string | null }) {
+  const day = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { dateStyle: "long" });
+  return (
+    <p className="flex items-center gap-2 pt-2 text-sm text-muted-foreground">
+      <CalendarClock className="size-4" /> Comes out {day}
+    </p>
   );
 }
 

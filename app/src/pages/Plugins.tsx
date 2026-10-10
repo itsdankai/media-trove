@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Clapperboard, Headphones, Link2, Plug, Search, Tv } from "lucide-react";
+import { Check, Clapperboard, Headphones, Link2, Plug, Tv } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { SyncModePicker } from "@/components/SyncModePicker";
 import { Badge } from "@/components/ui/badge";
@@ -13,34 +13,21 @@ import { friendlyError } from "@/lib/errors";
 
 const kindIcon = { movie: Clapperboard, show: Tv, audiobook: Headphones };
 
-export function Marketplace() {
-  const [q, setQ] = useState("");
+export function Plugins() {
   const [open, setOpen] = useState<CatalogEntry | null>(null);
-  const { data = [], isLoading, error } = useQuery({ queryKey: ["marketplace", q], queryFn: () => api.marketplace(q) });
+  const { data = [], error } = useQuery({ queryKey: ["marketplace"], queryFn: () => api.marketplace() });
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">Marketplace</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">Plugins</h1>
         <p className="text-sm text-muted-foreground">
           Connect the apps you watch and listen in. MediaTrove reads your activity there. For apps that support it, you
           can also choose to keep them in sync with MediaTrove.
         </p>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search apps and services…"
-          className="pl-9"
-          aria-label="Search apps and services"
-        />
-      </div>
-
       {error && <p className="text-sm text-destructive">{friendlyError(error)}</p>}
-      {!isLoading && data.length === 0 && <p className="text-sm text-muted-foreground">No plugins match “{q}”.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {data.map((p) => (

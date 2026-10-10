@@ -4,6 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Poster } from "@/components/PosterCard";
+import { menuForKey, PosterMenu } from "@/components/PosterMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -88,7 +89,11 @@ export function Calendar() {
   );
 }
 
+/** The library, for each entry's right-click (long-press) menu: the same quick options as a poster (builder, 2026-10-10). */
+const useLibrary = () => useQuery({ queryKey: ["library"], queryFn: () => api.library() }).data ?? [];
+
 function ListView({ entries }: { entries: CalendarEntry[] }) {
+  const library = useLibrary();
   if (!entries.length)
     return (
       <p className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
@@ -105,22 +110,24 @@ function ListView({ entries }: { entries: CalendarEntry[] }) {
           <ul className="divide-y rounded-xl border bg-card">
             {list.map((e) => (
               <li key={`${e.key}-${e.label}`}>
-                <Link
-                  to={`/media/${e.key}`}
-                  className="flex items-center gap-4 p-3 transition-colors hover:bg-accent/60"
-                >
-                  <Poster
-                    src={e.poster}
-                    kind={e.kind}
-                    title={e.title}
-                    className={e.kind === "audiobook" ? "w-12 shrink-0 rounded-md" : "w-10 shrink-0 rounded-md"}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{e.title}</p>
-                    <p className="truncate text-sm text-muted-foreground">{e.label}</p>
-                  </div>
-                  {!e.tracked && <Badge variant="outline">{newLabel[e.kind]}</Badge>}
-                </Link>
+                <PosterMenu info={menuForKey(library, e.key, e.kind, e.date)}>
+                  <Link
+                    to={`/media/${e.key}`}
+                    className="flex items-center gap-4 p-3 transition-colors hover:bg-accent/60"
+                  >
+                    <Poster
+                      src={e.poster}
+                      kind={e.kind}
+                      title={e.title}
+                      className={e.kind === "audiobook" ? "w-12 shrink-0 rounded-md" : "w-10 shrink-0 rounded-md"}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{e.title}</p>
+                      <p className="truncate text-sm text-muted-foreground">{e.label}</p>
+                    </div>
+                    {!e.tracked && <Badge variant="outline">{newLabel[e.kind]}</Badge>}
+                  </Link>
+                </PosterMenu>
               </li>
             ))}
           </ul>
@@ -134,6 +141,7 @@ const PER_CELL = 3;
 
 /** A month grid (weeks starting Sunday). Each day shows its first few releases, then "+N". */
 function MonthView({ entries, onNeedMore }: { entries: CalendarEntry[]; onNeedMore: () => void }) {
+  const library = useLibrary();
   const today = new Date();
   const [month, setMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const byDay = new Map<string, CalendarEntry[]>();
@@ -210,20 +218,22 @@ function MonthView({ entries, onNeedMore }: { entries: CalendarEntry[]; onNeedMo
               <ul className="space-y-0.5">
                 {list.slice(0, PER_CELL).map(({ e, n }) => (
                   <li key={e.key}>
-                    <Link
-                      to={`/media/${e.key}`}
-                      title={n > 1 ? `${e.title} · ${n} episodes` : `${e.title} · ${e.label}`}
-                      className={cn(
-                        "block truncate rounded px-1 py-0.5 hover:bg-accent/60",
-                        e.anime && "bg-kind-anime/15",
-                        !e.anime && e.kind === "show" && "bg-primary/10",
-                        !e.anime && e.kind === "movie" && "bg-kind-movie/10",
-                        e.kind === "audiobook" && "bg-kind-audiobook/10",
-                      )}
-                    >
-                      {e.title}
-                      {n > 1 && <span className="text-muted-foreground"> ×{n}</span>}
-                    </Link>
+                    <PosterMenu info={menuForKey(library, e.key, e.kind, e.date)}>
+                      <Link
+                        to={`/media/${e.key}`}
+                        title={n > 1 ? `${e.title} · ${n} episodes` : `${e.title} · ${e.label}`}
+                        className={cn(
+                          "block truncate rounded px-1 py-0.5 hover:bg-accent/60",
+                          e.anime && "bg-kind-anime/15",
+                          !e.anime && e.kind === "show" && "bg-primary/10",
+                          !e.anime && e.kind === "movie" && "bg-kind-movie/10",
+                          e.kind === "audiobook" && "bg-kind-audiobook/10",
+                        )}
+                      >
+                        {e.title}
+                        {n > 1 && <span className="text-muted-foreground"> ×{n}</span>}
+                      </Link>
+                    </PosterMenu>
                   </li>
                 ))}
                 {list.length > PER_CELL && (
