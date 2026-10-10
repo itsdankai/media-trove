@@ -1166,7 +1166,7 @@ function FileUploadItemMetadata(props: FileUploadItemMetadataProps) {
             id={itemContext.nameId}
             className={cn(
               "truncate text-sm font-medium",
-              size === "sm" && "text-[13px] leading-snug font-normal",
+              size === "sm" && "text-sm leading-snug font-normal",
             )}
           >
             {itemContext.fileState.file.name}
@@ -1175,7 +1175,7 @@ function FileUploadItemMetadata(props: FileUploadItemMetadataProps) {
             id={itemContext.sizeId}
             className={cn(
               "truncate text-xs text-muted-foreground",
-              size === "sm" && "text-[11px] leading-snug",
+              size === "sm" && "text-xs leading-snug",
             )}
           >
             {formatBytes(itemContext.fileState.file.size)}

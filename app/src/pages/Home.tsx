@@ -4,19 +4,27 @@ import { ChevronRight, Clapperboard, Headphones, Sparkles, Tv } from "lucide-rea
 import { Link } from "react-router";
 import { PosterCard, PosterGrid } from "@/components/PosterCard";
 import { menuFor } from "@/components/PosterMenu";
-import { Card } from "@/components/ui/card";
-import { api, completion, type Media, type Section, statusLabel, type TrackState } from "@/lib/api";
+import {
+  api,
+  type CalendarEntry,
+  completion,
+  formatMinutes,
+  type Media,
+  type Section,
+  statusLabel,
+  type TrackState,
+} from "@/lib/api";
 
 type Item = { media: Media; state: TrackState; watchlistedAt: number | null; favoritedAt: number | null };
 
 /** Two rows of posters at the widest layout (7 columns); narrower screens show two rows of fewer. */
 const ROW_LIMIT = 14;
 
-const sections: { id: Section; label: string; path: string; icon: typeof Tv; verb: string }[] = [
-  { id: "movie", label: "Movies", path: "/movies", icon: Clapperboard, verb: "Continue watching" },
-  { id: "show", label: "Shows", path: "/shows", icon: Tv, verb: "Continue watching" },
-  { id: "anime", label: "Anime", path: "/anime", icon: Sparkles, verb: "Continue watching" },
-  { id: "audiobook", label: "Audiobooks", path: "/audiobooks", icon: Headphones, verb: "Continue listening" },
+const sections: { id: Section; label: string; path: string; icon: typeof Tv }[] = [
+  { id: "movie", label: "Movies", path: "/movies", icon: Clapperboard },
+  { id: "show", label: "Shows", path: "/shows", icon: Tv },
+  { id: "anime", label: "Anime", path: "/anime", icon: Sparkles },
+  { id: "audiobook", label: "Audiobooks", path: "/audiobooks", icon: Headphones },
 ];
 
 /** Same split as the library pages: anime (movies and shows) has its own section. */
@@ -27,27 +35,33 @@ const inProgress = (i: Item) => i.state.status === "watching" || i.state.status 
 
 export function Home() {
   const { data = [], isLoading } = useQuery({ queryKey: ["library"], queryFn: () => api.library() });
-  // Watchlist titles not started yet live on the library's Watchlist tab, not here.
+  const { data: upcoming = [] } = useQuery({ queryKey: ["calendar", 14], queryFn: () => api.calendar(14) });
+  // Watchlist titles not started yet live on the Watchlist page, not here.
   const started = data.filter((i) => i.state.status !== "planned");
+  // What you're in the middle of, any kind, most recent first: the reason to open Home (Astra critique 2026-10-09;
+  // builder approved moving this above the counts and Most recent, 2026-10-10).
+  const going = started.filter(inProgress).slice(0, ROW_LIMIT);
   const recent = started.slice(0, ROW_LIMIT); // the API sorts by latest activity
+  const next = upNext(upcoming);
 
   return (
     <div className="space-y-10">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+      {/* The collection totals, kept as a compact strip of links to each library page. */}
+      <nav aria-label="Your library" className="flex flex-wrap gap-2">
         {sections.map((s) => (
-          <Link key={s.id} to={s.path}>
-            <Card className="flex-row items-center gap-3 p-4 transition-colors hover:bg-accent">
-              <s.icon className="hidden size-8 shrink-0 text-primary sm:block" />
-              <div>
-                <p className="text-2xl font-semibold leading-none">
-                  <NumberFlow value={started.filter((i) => inSection(s.id, i.media)).length} />
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            </Card>
+          <Link
+            key={s.id}
+            to={s.path}
+            className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+          >
+            <s.icon className="size-4 text-primary" />
+            <span className="font-semibold tabular-nums text-primary">
+              <NumberFlow value={started.filter((i) => inSection(s.id, i.media)).length} />
+            </span>
+            <span className="text-muted-foreground">{s.label}</span>
           </Link>
         ))}
-      </div>
+      </nav>
 
       {!isLoading && started.length === 0 && (
         <div className="rounded-xl border border-dashed p-10 text-center">
@@ -58,6 +72,30 @@ export function Home() {
         </div>
       )}
 
+      {going.length > 0 && (
+        <Row title="Continue">
+          {going.map((i) => (
+            <HomeCard key={i.media.key} item={i} sub={leftToGo(i)} />
+          ))}
+        </Row>
+      )}
+
+      {next.length > 0 && (
+        <Row title="Up next" more="/calendar">
+          {next.map((e) => (
+            <PosterCard
+              key={`${e.key}-${e.date}`}
+              to={`/media/${e.key}`}
+              kind={e.kind}
+              title={e.title}
+              poster={e.poster}
+              badge={dayName(e.date)}
+              sub={e.label || null}
+            />
+          ))}
+        </Row>
+      )}
+
       {recent.length > 0 && (
         <Row title="Most recent">
           {recent.map((i) => (
@@ -65,24 +103,42 @@ export function Home() {
           ))}
         </Row>
       )}
-
-      {sections.map((s) => {
-        const items = started.filter((i) => inSection(s.id, i.media) && inProgress(i)).slice(0, ROW_LIMIT);
-        if (!items.length) return null;
-        const status = s.id === "audiobook" ? "listening" : "watching";
-        return (
-          <Row key={s.id} title={`${s.label} · ${s.verb}`} more={`${s.path}?status=${status}`}>
-            {items.map((i) => (
-              <HomeCard key={i.media.key} item={i} />
-            ))}
-          </Row>
-        );
-      })}
     </div>
   );
 }
 
-function HomeCard({ item }: { item: Item }) {
+/** "S2 · E5" for a show, "3h 41m left" for a book or film, from what the apps last reported. */
+function leftToGo({ media, state }: Item) {
+  if (media.kind === "show") {
+    if (state.current) return `S${state.current.season} · E${state.current.episode}`;
+    const episodes = Math.max(media.extra.airedEpisodes ?? 0, media.extra.totalEpisodes ?? 0);
+    const seen = state.watchedEpisodes?.length ?? 0;
+    return episodes ? `${seen} of ${episodes} episodes` : statusLabel[state.status];
+  }
+  const total = media.kind === "audiobook" ? media.extra.runtimeMin : media.extra.runtime;
+  const left = total && state.progress ? Math.round(total * (1 - state.progress)) : null;
+  return left ? `${formatMinutes(left)} left` : statusLabel[state.status];
+}
+
+/** The calendar's next two weeks, tracked titles only, each title once (its soonest entry). */
+function upNext(entries: CalendarEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((e) => e.tracked && !seen.has(e.key) && seen.add(e.key)).slice(0, ROW_LIMIT);
+}
+
+function dayName(date: string) {
+  const d = new Date(`${date}T12:00:00`);
+  const today = new Date();
+  const days = Math.round((d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return new Date(`${date}T12:00:00`).toLocaleDateString(
+    undefined,
+    days < 7 ? { weekday: "long" } : { month: "short", day: "numeric" },
+  );
+}
+
+function HomeCard({ item, sub }: { item: Item; sub?: string }) {
   const { media, state, favoritedAt } = item;
   const done = state.status === "completed" || state.status === "finished";
   return (
@@ -92,8 +148,8 @@ function HomeCard({ item }: { item: Item }) {
       title={media.title}
       poster={media.poster}
       rated={{ mediaKey: media.key, anime: media.extra.anime, score: media.extra.rating }}
-      badge={done ? undefined : statusLabel[state.status]}
-      sub={media.year ? String(media.year) : null}
+      badge={done || sub ? undefined : statusLabel[state.status]}
+      sub={sub ?? (media.year ? String(media.year) : null)}
       progress={completion(media, state)}
       starred={favoritedAt != null}
       menu={menuFor(item)}

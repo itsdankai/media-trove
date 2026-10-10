@@ -1,7 +1,16 @@
 import { Slider } from "@/components/ui/slider";
 
 /** "What % counts as watched?" Used in first-run setup and in Settings. */
-export function ThresholdPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+export function ThresholdPicker({
+  value,
+  onChange,
+  onCommit,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  /** Called when the slider is let go (Settings saves then, like its other controls). */
+  onCommit?: (v: number) => void;
+}) {
   const pct = Math.round(value * 100);
   return (
     <div className="space-y-3">
@@ -15,6 +24,7 @@ export function ThresholdPicker({ value, onChange }: { value: number; onChange: 
         max={100}
         step={1}
         onValueChange={([v]) => onChange(v / 100)}
+        onValueCommit={([v]) => onCommit?.(v / 100)}
         aria-label="Watched threshold"
       />
       <p className="text-xs text-muted-foreground">

@@ -56,6 +56,11 @@ const navMore = [
 export function Layout() {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
+  const location = useLocation();
+  // On the results page the box keeps what was searched, so it can be refined (Astra critique 2026-10-09).
+  useEffect(() => {
+    if (location.pathname === "/search") setQ(new URLSearchParams(location.search).get("q") ?? "");
+  }, [location.pathname, location.search]);
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   // The saved look (Settings → Appearance), kept in step with the server's copy.
   useEffect(() => {

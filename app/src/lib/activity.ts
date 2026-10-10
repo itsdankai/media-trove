@@ -2,12 +2,26 @@
 // minutes) into one line per item, episode, app and day: "Listened 63% → 66%".
 import type { EventRow } from "./api";
 
-export type ActivityGroup<T> = { rows: T[]; first: EventRow; last: EventRow };
+/** also: other apps that reported the same viewing (folded into this line, see foldViewings). */
+export type ActivityGroup<T> = { rows: T[]; first: EventRow; last: EventRow; also?: string[] };
+
+/** Two apps reporting one viewing land within seconds; events.ts counts marks this close as one watch. */
+const SAME_VIEWING_MS = 12 * 60 * 60 * 1000;
+/** A position this far in that came with a watch is the same viewing, not separate news. */
+const DONE_PROGRESS = 0.9;
 
 const dayOf = (iso: string) => new Date(iso).toLocaleDateString();
 
 /** Rows newest first in, groups newest first out. Each group sits where its newest row was. */
-export function groupProgress<T>(rows: T[], eventOf: (row: T) => EventRow): ActivityGroup<T>[] {
+export function groupProgress<T>(
+  rows: T[],
+  eventOf: (row: T) => EventRow,
+  nameOf: (row: T) => string | undefined = (r) => eventOf(r).sourceName,
+): ActivityGroup<T>[] {
+  return foldViewings(groupPositions(rows, eventOf), eventOf, nameOf);
+}
+
+function groupPositions<T>(rows: T[], eventOf: (row: T) => EventRow): ActivityGroup<T>[] {
   const out: ActivityGroup<T>[] = [];
   const open = new Map<string, ActivityGroup<T>>();
   for (const row of rows) {
@@ -28,6 +42,39 @@ export function groupProgress<T>(rows: T[], eventOf: (row: T) => EventRow): Acti
     }
   }
   return out;
+}
+
+/**
+ * Stremio and Nuvio often report the same viewing (and a "to 100%" position with it), which read as the same
+ * episode watched twice (Astra critique 2026-10-09). Fold those into the newest watch: one line, "via A and B".
+ */
+function foldViewings<T>(
+  groups: ActivityGroup<T>[],
+  eventOf: (row: T) => EventRow,
+  nameOf: (row: T) => string | undefined,
+): ActivityGroup<T>[] {
+  const gone = new Set<ActivityGroup<T>>();
+  const same = (a: EventRow, b: EventRow) =>
+    a.mediaKey === b.mediaKey &&
+    a.season === b.season &&
+    a.episode === b.episode &&
+    Math.abs(Date.parse(a.occurredAt) - Date.parse(b.occurredAt)) <= SAME_VIEWING_MS;
+  for (const g of groups) {
+    if (gone.has(g) || (g.last.kind !== "watched" && g.last.kind !== "finished")) continue;
+    const own = nameOf(g.rows[0]);
+    for (const h of groups) {
+      if (h === g || gone.has(h) || !same(g.last, h.last)) continue;
+      const repeat = h.last.kind === g.last.kind && h.last.source !== g.last.source;
+      const reached = h.last.kind === "progress" && (h.last.progress ?? 0) >= DONE_PROGRESS;
+      if (!repeat && !reached) continue;
+      gone.add(h);
+      g.rows.push(...h.rows);
+      const name = nameOf(h.rows[0]) ?? eventOf(h.rows[0]).source;
+      if (h.last.source !== "manual" && name && name !== own && !g.also?.includes(name))
+        g.also = [...(g.also ?? []), name];
+    }
+  }
+  return groups.filter((g) => !gone.has(g));
 }
 
 const pct = (p: number | null | undefined) => `${Math.round((p ?? 0) * 100)}%`;

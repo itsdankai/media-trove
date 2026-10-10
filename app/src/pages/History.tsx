@@ -14,7 +14,11 @@ export function History() {
 
   // Position updates for the same item, app and day become one line (groupProgress).
   const days = new Map<string, ActivityGroup<(typeof data)[number]>[]>();
-  for (const g of groupProgress(data, (r) => r.event)) {
+  for (const g of groupProgress(
+    data,
+    (r) => r.event,
+    (r) => r.sourceName,
+  )) {
     const day = new Date(g.last.occurredAt).toLocaleDateString(undefined, {
       weekday: "long",
       month: "long",
@@ -86,7 +90,8 @@ export function describe(e: EventRow, kind?: MediaKind | null, sourceName = e.so
 export function describeGroup(g: ActivityGroup<unknown>, kind?: MediaKind | null, sourceName = g.last.sourceName) {
   const e = g.last;
   const ep = e.season != null && e.episode != null ? ` S${e.season} · E${e.episode}` : "";
-  const via = e.source !== "manual" && sourceName ? ` · via ${sourceName}` : "";
+  const apps = [e.source !== "manual" ? sourceName : undefined, ...(g.also ?? [])].filter(Boolean);
+  const via = apps.length ? ` · via ${apps.join(" and ")}` : "";
   switch (e.kind) {
     case "watched":
       return `Watched${ep}${via}`;

@@ -37,7 +37,7 @@ export function Settings() {
     if (settings) setThreshold(settings.watchedThreshold);
   }, [settings]);
   const save = useMutation({
-    mutationFn: () => api.saveSettings({ watchedThreshold: threshold }),
+    mutationFn: (v: number) => api.saveSettings({ watchedThreshold: v }),
     onSuccess: (s) => {
       qc.setQueryData(["settings"], s);
       qc.invalidateQueries({ queryKey: ["library"] });
@@ -67,18 +67,13 @@ export function Settings() {
         <section className="space-y-4">
           <h2 className="text-lg font-medium">Tracking</h2>
           <Card className="gap-5 p-5">
-            <ThresholdPicker value={threshold} onChange={setThreshold} />
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={() => save.mutate()}
-                disabled={save.isPending || threshold === settings?.watchedThreshold}
-              >
-                Save
-              </Button>
-              {save.isSuccess && threshold === settings?.watchedThreshold && (
-                <span className="text-sm text-muted-foreground">Saved. Your library was recalculated.</span>
-              )}
-            </div>
+            {/* Saves when the slider is let go, like every other setting here (Astra critique 2026-10-09). */}
+            <ThresholdPicker value={threshold} onChange={setThreshold} onCommit={(v) => save.mutate(v)} />
+            {save.isSuccess && threshold === settings?.watchedThreshold && (
+              <p className="text-sm text-muted-foreground" role="status">
+                Saved. Your library was recalculated.
+              </p>
+            )}
             {settings && <CaughtUpWindow days={settings.caughtUpDays} />}
             {settings && <WatchlistUntil value={settings.watchlistUntil} />}
           </Card>
@@ -331,7 +326,7 @@ function Connections() {
                   <p className="truncate font-medium">{name(c.pluginId)}</p>
                   <p className="truncate text-sm text-muted-foreground">{c.accountName}</p>
                 </div>
-                <StatusBadge status={statuses[c.pluginId]} />
+                <StatusBadge status={statuses[c.pluginId]} syncing={c.syncing} failed={Boolean(c.lastError)} />
                 <Button
                   size="sm"
                   variant="secondary"
@@ -345,9 +340,9 @@ function Connections() {
                   variant="ghost"
                   onClick={() => resync.mutate(c.id)}
                   disabled={c.syncing || resync.isPending}
-                  title="Re-import everything from this app, using the latest matching. Your own entries are kept."
+                  title="Drops what this app brought in and imports it all again with the latest matching. Your own entries are kept."
                 >
-                  <RotateCcw /> Start over
+                  <RotateCcw /> Re-import
                 </Button>
                 <Confirm
                   title={`Disconnect ${name(c.pluginId)}?`}
@@ -486,13 +481,21 @@ function PushLine({ c, app }: { c: Connection; app: string }) {
   );
 }
 
-function StatusBadge({ status }: { status?: PluginStatus }) {
-  if (!status || status.state === "stopped") return <Badge variant="outline">Idle</Badge>;
-  if (status.state === "running") return <Badge variant="secondary">Running</Badge>;
+/** Syncing now, Sync failed (the line below says why), Ready (up; syncs on schedule), Starting, Off, or Not working. */
+function StatusBadge({ status, syncing, failed }: { status?: PluginStatus; syncing?: boolean; failed?: boolean }) {
+  if (syncing) return <Badge>Syncing…</Badge>;
+  if (failed && status?.state === "running") return <Badge variant="destructive">Sync failed</Badge>;
+  if (!status || status.state === "stopped") return <Badge variant="outline">Off</Badge>;
+  if (status.state === "running")
+    return (
+      <Badge variant="secondary" title="Connected. It syncs on its own schedule; the line below says when it last did.">
+        Ready
+      </Badge>
+    );
   if (status.state === "starting") return <Badge variant="outline">Starting…</Badge>;
   return (
     <Badge variant="destructive" title={status.lastError}>
-      Disconnected
+      Not working
     </Badge>
   );
 }

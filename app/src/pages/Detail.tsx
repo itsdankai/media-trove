@@ -53,20 +53,22 @@ export function Detail() {
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />
         </div>
-        <div className="flex flex-col gap-6 sm:flex-row">
+        {/* Phones: a small poster beside the title, then everything else full width, so the status, progress and
+            buttons are on the first screen (Astra critique 2026-10-09). Wider: poster in its own column. */}
+        <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 gap-y-5 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-x-6">
           <Poster
             src={m.poster}
             rated={{ mediaKey: m.key, anime: m.extra.anime, score: m.extra.rating }}
             kind={m.kind}
             title={m.title}
             starred={data.favorited}
-            className="w-40 shrink-0 shadow-2xl shadow-black/50 sm:w-52"
+            className="self-start shadow-2xl shadow-black/50 sm:row-span-2"
           />
-          <div className="min-w-0 flex-1 space-y-4">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight">{m.title}</h1>
-              <p className="mt-1 text-muted-foreground">{metaLine(m)}</p>
-            </div>
+          <div className="min-w-0 space-y-2 self-center sm:self-start">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{m.title}</h1>
+            <p className="text-sm text-muted-foreground sm:text-base">{metaLine(m)}</p>
+          </div>
+          <div className="col-span-2 min-w-0 space-y-4 sm:col-span-1 sm:col-start-2">
             <div className="flex flex-wrap items-center gap-2">
               <Badge>
                 {state.status === "planned" && !data.watchlisted ? "Not tracked" : statusLabel[state.status]}
@@ -77,7 +79,6 @@ export function Detail() {
                 </Badge>
               ))}
             </div>
-            {m.overview && <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{m.overview}</p>}
             {/* A started title stays on the watchlist until Settings → Tracking's percentage; finished ones leave it. */}
             <div className="flex flex-wrap gap-2">
               {(data.watchlisted || !["completed", "finished", "caught_up"].includes(state.status)) && (
@@ -88,6 +89,7 @@ export function Detail() {
             {m.kind === "movie" && <MovieActions m={m} state={state} track={track} />}
             {m.kind === "audiobook" && <AudiobookActions m={m} state={state} track={track} />}
             {m.kind === "show" && <ShowSummary m={m} state={state} />}
+            {m.overview && <Overview text={m.overview} />}
           </div>
         </div>
       </section>
@@ -95,6 +97,25 @@ export function Detail() {
       {m.kind === "show" && <Seasons m={m} state={state} track={track} />}
 
       {events.length > 0 && <Activity events={events} kind={m.kind} />}
+    </div>
+  );
+}
+
+/** The synopsis, folded to three lines until asked for (it's for deciding, not for every visit). */
+function Overview({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+      <p className={cn(!open && "line-clamp-3")}>{text}</p>
+      {text.length > 180 && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="mt-1 font-medium text-foreground underline-offset-4 hover:underline"
+        >
+          {open ? "Less" : "More"}
+        </button>
+      )}
     </div>
   );
 }
@@ -160,7 +181,10 @@ function metaLine(m: Media) {
     const series = x.series ? `${x.series.name}${x.series.position ? ` #${x.series.position}` : ""}` : null;
     return [
       x.authors?.join(", "),
-      x.narrators?.length ? `Narrated by ${x.narrators.join(", ")}` : null,
+      // GraphicAudio casts run to twenty names; the first two say enough.
+      x.narrators?.length
+        ? `Narrated by ${x.narrators.slice(0, 2).join(", ")}${x.narrators.length > 2 ? ` and ${x.narrators.length - 2} more` : ""}`
+        : null,
       formatMinutes(x.runtimeMin),
       series,
       ratingLine(m),
@@ -169,7 +193,14 @@ function metaLine(m: Media) {
       .join(" · ");
   }
   if (m.kind === "show")
-    return [m.year, x.seasons && `${x.seasons.length} seasons`, x.status, ratingLine(m)].filter(Boolean).join(" · ");
+    return [
+      m.year,
+      x.seasons && `${x.seasons.length} season${x.seasons.length === 1 ? "" : "s"}`,
+      x.status,
+      ratingLine(m),
+    ]
+      .filter(Boolean)
+      .join(" · ");
   return [m.year, formatMinutes(x.runtime), ratingLine(m)].filter(Boolean).join(" · ");
 }
 
@@ -376,7 +407,8 @@ function Seasons({ m, state, track }: { m: Media; state: TrackState; track: Trac
                   track.mutate({ kind: isSeen ? "unwatched" : "watched", season: e.season, episode: e.number })
                 }
               >
-                <Check />
+                {/* Unwatched is an empty circle, watched a filled check (Astra critique 2026-10-09). */}
+                {isSeen && <Check />}
               </Button>
             </li>
           );
