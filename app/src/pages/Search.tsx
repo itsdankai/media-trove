@@ -15,7 +15,7 @@ export function Search() {
 
   return (
     <div className="space-y-10">
-      <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon">Results for “{q}”</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">Results for “{q}”</h1>
       {kinds.map((kind) => (
         <Section key={kind} kind={kind} q={q} />
       ))}
