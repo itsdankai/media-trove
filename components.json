@@ -20,6 +20,7 @@
   "iconLibrary": "lucide",
   "registries": {
     "@diceui": "https://diceui.com/r/radix-nova/{name}.json",
-    "@animateicons": "https://animateicons.in/r/{name}.json"
+    "@animateicons": "https://animateicons.in/r/{name}.json",
+    "@duwop": "https://raw.githubusercontent.com/itsdankai/DUWOP/main/public/r/{name}.json"
   }
 }

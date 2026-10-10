@@ -92,10 +92,11 @@ export type Settings = {
   caughtUpDays: number; // 0 = any time
   watchlistUntil: number; // a saved title stays on the Watchlist until its progress bar reaches this
   ratingPosters: boolean; // RPDB posters for movies/shows (when the server has RPDB_API_KEY), score bar for anime
-  theme: string; // lib/themes.ts
-  effects: string[]; // underglow, ambient, motion, shine
+  theme: string; // lib/theme.ts (DUWOP)
+  effects: string[]; // lib/theme.ts effects
   amoled: boolean; // true black backgrounds (dark themes)
-  font: string; // lib/themes.ts fonts
+  font: string; // lib/theme.ts fonts
+  palette?: { nh: number; nc: number; ph: number; gh: number }; // the "custom" theme's rolled colours
 };
 
 export type Field = {

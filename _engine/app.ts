@@ -204,11 +204,19 @@ export function createApp(
             ratingPosters: z.boolean().optional(),
             theme: z
               .string()
-              .regex(/^[a-z]{2,20}$/)
+              .regex(/^[a-z0-9]{2,20}$/)
               .optional(),
             effects: z
-              .array(z.enum(["underglow", "ambient", "motion", "shine"]))
-              .max(4)
+              .array(z.enum(["underglow", "ambient", "motion", "shine", "horizon", "neon"]))
+              .max(6)
+              .optional(),
+            palette: z
+              .object({
+                nh: z.number().min(0).max(360),
+                nc: z.number().min(0).max(0.1),
+                ph: z.number().min(0).max(360),
+                gh: z.number().min(0).max(360),
+              })
               .optional(),
             amoled: z.boolean().optional(),
             font: z

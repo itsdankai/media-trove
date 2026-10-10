@@ -102,7 +102,7 @@ export function PosterCard({ to, kind, title, poster, sub, progress, badge, rate
   const showBar = progress != null && progress > 0 && progress < 1;
   const card = (
     <Link to={to} className="group block focus:outline-none">
-      <div className="poster-lift rounded-lg transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring">
+      <div className="fx-lift rounded-lg transition-transform duration-200 group-hover:-translate-y-1 group-focus-visible:ring-2 group-focus-visible:ring-ring">
         <Poster
           src={poster}
           kind={kind}

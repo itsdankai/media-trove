@@ -18,11 +18,12 @@ export type Settings = {
   watchlistUntil: number;
   /** Posters with scores drawn on: RPDB for movies and shows (needs RPDB_API_KEY), the community score for anime. */
   ratingPosters: boolean;
-  /** Settings → Appearance (2026-10-08): a colour theme and the effects switched on (app/src/lib/themes.ts). */
+  /** Settings → Appearance (2026-10-08): a colour theme and the effects switched on (DUWOP, app/src/lib/theme.ts). */
   theme: string;
   effects: string[];
   amoled: boolean; // true black backgrounds for OLED screens (dark themes)
-  font: string; // app/src/lib/themes.ts fonts
+  font: string; // app/src/lib/theme.ts fonts
+  palette?: { nh: number; nc: number; ph: number; gh: number }; // the "custom" theme's rolled colours
 };
 
 const defaults: Settings = {

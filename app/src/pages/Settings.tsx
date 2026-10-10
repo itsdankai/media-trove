@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { cn } from "cn";
 import { Download, RefreshCw, RotateCcw, Store, Unplug, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Account, People } from "@/components/AccountSettings";
+import { Appearance as DuwopAppearance } from "@/components/appearance";
 import { Confirm } from "@/components/Confirm";
 import { FileDrop } from "@/components/FileDrop";
 import { SyncModePicker } from "@/components/SyncModePicker";
@@ -24,7 +24,6 @@ import {
 } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { friendlyError } from "@/lib/errors";
-import { applyLook, effects, fonts, type Look, themes } from "@/lib/themes";
 
 export function Settings() {
   const qc = useQueryClient();
@@ -184,7 +183,8 @@ function WatchlistUntil({ value }: { value: number }) {
   );
 }
 
-/** Theme, effects and rating posters (RPDB for movies and shows when the server has RPDB_API_KEY; the anime community score). */
+/** Theme, effects and fonts (the DUWOP picker), plus rating posters (RPDB for movies and shows when the server has
+ *  RPDB_API_KEY; the anime community score). */
 function Appearance({ settings }: { settings: SettingsData }) {
   const qc = useQueryClient();
   const { data: config } = useQuery({ queryKey: ["config"], queryFn: api.config });
@@ -192,105 +192,13 @@ function Appearance({ settings }: { settings: SettingsData }) {
     mutationFn: (patch: Partial<SettingsData>) => api.saveSettings(patch),
     onSuccess: (s) => qc.setQueryData(["settings"], s),
   });
-  // Show the change straight away; the server copy follows.
-  const change = (patch: Partial<Look>) => {
-    applyLook({ ...settings, ...patch });
-    save.mutate(patch);
-  };
-  const toggle = (id: string, on: boolean) =>
-    change({ effects: on ? [...settings.effects, id] : settings.effects.filter((e) => e !== id) });
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-medium">Appearance</h2>
-      <Card className="gap-6 p-5">
-        <div className="space-y-3">
-          <p className="text-sm font-medium">Theme</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {themes.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => change({ theme: t.id })}
-                aria-pressed={settings.theme === t.id}
-                // The preview carries the theme itself (and AMOLED), so it shows the real colours.
-                data-theme={t.id}
-                data-amoled={settings.amoled ? "" : undefined}
-                className={cn(
-                  t.id !== "daylight" && "dark",
-                  "rounded-xl border bg-background p-3 text-left text-foreground transition-shadow",
-                  settings.theme === t.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
-                )}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="size-4 rounded-full bg-primary" />
-                  <span className="size-4 rounded-full" style={{ background: "var(--glow2)" }} />
-                  <span className="size-4 rounded-full bg-card ring-1 ring-border" />
-                </div>
-                <p className="mt-2 text-sm font-medium">{t.name}</p>
-                <p className="max-w-prose text-xs text-muted-foreground">{t.note}</p>
-              </button>
-            ))}
-          </div>
-          <label htmlFor="amoled" className="flex items-center gap-3 pt-2 text-sm">
-            <Switch
-              id="amoled"
-              checked={settings.amoled}
-              onCheckedChange={(on) => change({ amoled: on })}
-              disabled={settings.theme === "daylight"}
-              aria-label="AMOLED mode"
-            />
-            <span>
-              AMOLED mode
-              <span className="block max-w-prose text-xs text-muted-foreground">
-                True black backgrounds: easier on OLED screens and their batteries. Works with every dark theme.
-              </span>
-            </span>
-          </label>
-        </div>
-        <div className="space-y-3 border-t pt-5">
-          <p className="text-sm font-medium">Font</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {fonts.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => change({ font: f.id })}
-                aria-pressed={settings.font === f.id}
-                title={f.note}
-                className={cn(
-                  "rounded-lg border bg-card px-3 py-2 text-left text-sm transition-shadow",
-                  settings.font === f.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
-                )}
-              >
-                {f.name}
-              </button>
-            ))}
-          </div>
-          <p className="max-w-prose text-xs text-muted-foreground">
-            {fonts.find((f) => f.id === settings.font)?.note} Fonts other than Inter and System load from Google Fonts.
-          </p>
-        </div>
-        <div className="space-y-3 border-t pt-5">
-          <p className="text-sm font-medium">Effects</p>
-          {effects.map((e) => (
-            <label key={e.id} htmlFor={`fx-${e.id}`} className="flex items-center gap-3 text-sm">
-              <Switch
-                id={`fx-${e.id}`}
-                checked={settings.effects.includes(e.id)}
-                onCheckedChange={(on) => toggle(e.id, on)}
-                disabled={e.id === "motion" && !settings.effects.includes("ambient")}
-                aria-label={e.name}
-              />
-              <span>
-                {e.name}
-                <span className="block max-w-prose text-xs text-muted-foreground">{e.note}</span>
-              </span>
-            </label>
-          ))}
-          <p className="max-w-prose text-xs text-muted-foreground">
-            Movement is switched off if your device is set to reduce motion.
-          </p>
-        </div>
+      {/* The picker shows each change at once; the server copy follows, so every device matches. */}
+      <DuwopAppearance
+        onChange={({ theme, effects, amoled, font, palette }) => save.mutate({ theme, effects, amoled, font, palette })}
+      >
         <label htmlFor="rating-posters" className="flex items-center gap-3 border-t pt-5 text-sm">
           <Switch
             id="rating-posters"
@@ -309,12 +217,11 @@ function Appearance({ settings }: { settings: SettingsData }) {
             </span>
           </span>
         </label>
-      </Card>
+      </DuwopAppearance>
     </section>
   );
 }
 
-/** Download the whole library as one file, see the latest weekly backup, restore from a file. */
 function Backups() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["backup-status"], queryFn: api.backupStatus });
