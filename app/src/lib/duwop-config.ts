@@ -1,4 +1,4 @@
-import type { Look } from "./theme";
+import type { Look, Theme } from "./theme";
 
 export const duwopConfig: {
   /** localStorage key for the saved look. Give each app its own so two apps on one domain don't clash. */
@@ -9,6 +9,10 @@ export const duwopConfig: {
   themes: string[] | "all";
   /** Opt-in effects from add-on items (e.g. @duwop/popcorn), shown in the picker after the core ones. */
   extraEffects?: { id: string; name: string; note: string }[];
+  /** Themes from add-on packs (e.g. @duwop/gods: extraThemes: gods), offered after the core ones. */
+  extraThemes?: Theme[];
+  /** false when the app hosts its own fonts (e.g. @fontsource, for a strict CSP): DUWOP then never calls Google Fonts. */
+  loadFonts?: boolean;
 } = {
   storageKey: "mediatrove-look",
   defaultLook: { theme: "duskwood", effects: ["underglow", "ambient"], amoled: false, font: "inter" },
