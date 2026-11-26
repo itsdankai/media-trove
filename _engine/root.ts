@@ -6,6 +6,7 @@ import { type Context, Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { z } from "zod";
 import { type Accounts, GROUP_COOKIE, INVITE_DAYS, type Mailer } from "./accounts.ts";
+import { sendAnymouse } from "./anymouse.ts";
 import { passwordGate } from "./auth.ts";
 import type { Workspaces } from "./workspaces.ts";
 
@@ -107,6 +108,18 @@ export function createRoot(opts: {
         await accounts.auth.api.removeUser({ body: { userId: id }, headers: c.req.raw.headers });
         workspaces.remove(id);
         return c.json({ ok: true });
+      })
+
+      // Anymouse (@duwop/anymouse, server half copied to anymouse.ts because the image ships only _engine/):
+      // Settings → Anymouse posts to the Discord thread "AM - Media Trove". No name is sent, even though only
+      // signed-in people reach it. Needs ANYMOUSE_DISCORD_WEBHOOK + ANYMOUSE_THREAD_ID, else it answers 503.
+      .post("/api/anymouse", async (c) => {
+        const r = await sendAnymouse(await c.req.json().catch(() => null), {
+          app: "MediaTrove",
+          webhook: env.ANYMOUSE_DISCORD_WEBHOOK,
+          thread: env.ANYMOUSE_THREAD_ID,
+        });
+        return c.json(r.body, r.status);
       })
 
       // A plugin added by address shows up in everyone's marketplace, so only the admin adds them.

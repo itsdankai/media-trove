@@ -7,6 +7,8 @@ playwright-report/
 .env
 _private/
 CLAUDE.md
+AGENTS.md
+AGENTS.kit.md
 plan.md
 origin/
 data/
@@ -16,3 +18,4 @@ DESIGN.md
 DESIGN.json
 .impeccable/
 HANDOFF.md
+DECISIONS.md

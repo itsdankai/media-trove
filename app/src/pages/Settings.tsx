@@ -3,6 +3,7 @@ import { Download, Plug, RefreshCw, RotateCcw, Unplug, Upload } from "lucide-rea
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Account, People } from "@/components/AccountSettings";
+import { Anymouse } from "@/components/anymouse";
 import { Appearance as DuwopAppearance } from "@/components/appearance";
 import { Confirm } from "@/components/Confirm";
 import { FileDrop } from "@/components/FileDrop";
@@ -48,7 +49,11 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">Settings</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-primary fx-neon fx-title">Settings</h1>
+          {/* The anonymous idea / bug / gripe box (@duwop/anymouse), posting to "AM - Media Trove" on Discord. */}
+          <Anymouse />
+        </div>
         {/* One section at a time, so the page doesn't grow into one long scroll (builder, 2026-10-08).
             The tab is in the URL (?tab=apps), so a link or Back lands on the same one. */}
         <Tabs value={tab} onValueChange={(v) => setParams(v === "tracking" ? {} : { tab: v }, { replace: true })}>

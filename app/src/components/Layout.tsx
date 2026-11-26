@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, type ForwardRefExoticComponent, type RefAttributes, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { Anymouse } from "@/components/anymouse";
 import { BookmarkIcon } from "@/components/ui/bookmark-icon";
 import { CalendarDaysIcon } from "@/components/ui/calendar-days-icon";
 import { ClapperboardIcon } from "@/components/ui/clapperboard-icon";
@@ -130,6 +131,8 @@ export function Layout() {
                 aria-label="Search"
               />
             </form>
+            {/* Always on screen, every page (builder, 2026-11-25). No light/dark switch here, so it ends the row. */}
+            <Anymouse inHeader />
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8">
